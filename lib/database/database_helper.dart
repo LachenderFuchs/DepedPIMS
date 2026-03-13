@@ -22,10 +22,7 @@ class DatabaseHelper {
 
     _db = await factory.openDatabase(
       dbPath,
-      options: OpenDatabaseOptions(
-        version: 1,
-        onCreate: _onCreate,
-      ),
+      options: OpenDatabaseOptions(version: 1, onCreate: _onCreate),
     );
 
     return _db!;
@@ -62,8 +59,11 @@ class DatabaseHelper {
 
   static Future<void> insertWFP(WFPEntry entry) async {
     final d = await db;
-    await d.insert('wfp', entry.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.fail);
+    await d.insert(
+      'wfp',
+      entry.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.fail,
+    );
   }
 
   static Future<List<WFPEntry>> getAllWFPs() async {
@@ -81,8 +81,12 @@ class DatabaseHelper {
 
   static Future<void> updateWFP(WFPEntry entry) async {
     final d = await db;
-    await d.update('wfp', entry.toMap(),
-        where: 'id = ?', whereArgs: [entry.id]);
+    await d.update(
+      'wfp',
+      entry.toMap(),
+      where: 'id = ?',
+      whereArgs: [entry.id],
+    );
   }
 
   /// Deletes a WFP entry AND all its associated activities.
@@ -95,14 +99,20 @@ class DatabaseHelper {
   static Future<int> countWFPsByYear(int year) async {
     final d = await db;
     final result = await d.rawQuery(
-        'SELECT COUNT(*) AS cnt FROM wfp WHERE year = ?', [year]);
+      'SELECT COUNT(*) AS cnt FROM wfp WHERE year = ?',
+      [year],
+    );
     return (result.first['cnt'] as int?) ?? 0;
   }
 
   static Future<bool> wfpIdExists(String id) async {
     final d = await db;
-    final rows = await d.query('wfp',
-        columns: ['id'], where: 'id = ?', whereArgs: [id]);
+    final rows = await d.query(
+      'wfp',
+      columns: ['id'],
+      where: 'id = ?',
+      whereArgs: [id],
+    );
     return rows.isNotEmpty;
   }
 
@@ -110,22 +120,32 @@ class DatabaseHelper {
 
   static Future<void> insertActivity(BudgetActivity activity) async {
     final d = await db;
-    await d.insert('activities', activity.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.fail);
+    await d.insert(
+      'activities',
+      activity.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.fail,
+    );
   }
 
-  static Future<List<BudgetActivity>> getActivitiesForWFP(
-      String wfpId) async {
+  static Future<List<BudgetActivity>> getActivitiesForWFP(String wfpId) async {
     final d = await db;
-    final rows = await d.query('activities',
-        where: 'wfpId = ?', whereArgs: [wfpId], orderBy: 'id ASC');
+    final rows = await d.query(
+      'activities',
+      where: 'wfpId = ?',
+      whereArgs: [wfpId],
+      orderBy: 'id ASC',
+    );
     return rows.map(BudgetActivity.fromMap).toList();
   }
 
   static Future<void> updateActivity(BudgetActivity activity) async {
     final d = await db;
-    await d.update('activities', activity.toMap(),
-        where: 'id = ?', whereArgs: [activity.id]);
+    await d.update(
+      'activities',
+      activity.toMap(),
+      where: 'id = ?',
+      whereArgs: [activity.id],
+    );
   }
 
   static Future<void> deleteActivity(String id) async {
@@ -136,14 +156,34 @@ class DatabaseHelper {
   static Future<int> countActivitiesForWFP(String wfpId) async {
     final d = await db;
     final result = await d.rawQuery(
-        'SELECT COUNT(*) AS cnt FROM activities WHERE wfpId = ?', [wfpId]);
+      'SELECT COUNT(*) AS cnt FROM activities WHERE wfpId = ?',
+      [wfpId],
+    );
     return (result.first['cnt'] as int?) ?? 0;
   }
 
   static Future<bool> activityIdExists(String id) async {
     final d = await db;
-    final rows = await d.query('activities',
-        columns: ['id'], where: 'id = ?', whereArgs: [id]);
+    final rows = await d.query(
+      'activities',
+      columns: ['id'],
+      where: 'id = ?',
+      whereArgs: [id],
+    );
     return rows.isNotEmpty;
+  }
+
+  /// Returns the total number of budget activities across ALL WFP entries.
+  static Future<int> countAllActivities() async {
+    final d = await db;
+    final result = await d.rawQuery('SELECT COUNT(*) AS cnt FROM activities');
+    return (result.first['cnt'] as int?) ?? 0;
+  }
+
+  /// Returns ALL budget activities across every WFP entry (for dashboard totals).
+  static Future<List<BudgetActivity>> getAllActivities() async {
+    final d = await db;
+    final rows = await d.query('activities', orderBy: 'id ASC');
+    return rows.map(BudgetActivity.fromMap).toList();
   }
 }

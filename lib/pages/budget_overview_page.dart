@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:data_table_2/data_table_2.dart';
-import '../models/wfp_entry.dart';
 import '../models/budget_activity.dart';
 import '../services/app_state.dart';
 import '../utils/currency_formatter.dart';
@@ -28,6 +27,11 @@ class _BudgetOverviewPageState extends State<BudgetOverviewPage> {
   // Sort state
   int _sortColumnIndex = 0;
   bool _sortAscending = true;
+
+  // Pagination state
+  int _currentPage = 0;
+  int _rowsPerPage = 10;
+  static const _rowsPerPageOptions = [10, 25, 50, 100];
 
   static const _statusOptions = [
     'Not Started',
@@ -83,10 +87,27 @@ class _BudgetOverviewPageState extends State<BudgetOverviewPage> {
     return filtered;
   }
 
-  void _onSort(int col, bool asc) => setState(() {
-    _sortColumnIndex = col;
-    _sortAscending = asc;
-  });
+  void _onSort(int col, bool asc) {
+    setState(() {
+      _sortColumnIndex = col;
+      _sortAscending = asc;
+      _currentPage = 0;
+    });
+  }
+
+  List<BudgetActivity> get _pagedRows {
+    final all = _filtered;
+    final start = _currentPage * _rowsPerPage;
+    if (start >= all.length) return [];
+    final end = (start + _rowsPerPage).clamp(0, all.length);
+    return all.sublist(start, end);
+  }
+
+  int get _totalPages {
+    final total = _filtered.length;
+    if (total == 0) return 1;
+    return (total / _rowsPerPage).ceil();
+  }
 
   // ─── WFP Selection ────────────────────────────────────────────────────────
 
@@ -183,6 +204,24 @@ class _BudgetOverviewPageState extends State<BudgetOverviewPage> {
 
     if (totalVal == null || projectedVal == null || disbursedVal == null) {
       _showSnack('Please enter valid numeric values.', isError: true);
+      return;
+    }
+
+    // ── Ceiling check: sum of all activity totals must not exceed WFP amount ─
+    final existingActivities = widget.appState.activities;
+    final otherActivitiesTotal = existingActivities
+        .where((a) => a.id != _editingActivity?.id) // exclude self when editing
+        .fold<double>(0, (sum, a) => sum + a.total);
+    final projectedGrandTotal = otherActivitiesTotal + totalVal;
+
+    if (projectedGrandTotal > selectedWFP.amount) {
+      final remaining = selectedWFP.amount - otherActivitiesTotal;
+      _showSnack(
+        'Amount exceeds WFP ceiling. '
+        'Remaining available: ${CurrencyFormatter.format(remaining < 0 ? 0 : remaining)} '
+        '(WFP Total: ${CurrencyFormatter.format(selectedWFP.amount)})',
+        isError: true,
+      );
       return;
     }
 
@@ -291,7 +330,6 @@ class _BudgetOverviewPageState extends State<BudgetOverviewPage> {
       builder: (context, _) {
         final selectedWFP = widget.appState.selectedWFP;
         final isLoading = widget.appState.isLoading;
-        final rows = _filtered;
 
         return Padding(
           padding: const EdgeInsets.all(24),
@@ -357,10 +395,10 @@ class _BudgetOverviewPageState extends State<BudgetOverviewPage> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xff2F3E46).withOpacity(0.05),
+                    color: const Color(0xff2F3E46).withValues(alpha: 0.05),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: const Color(0xff2F3E46).withOpacity(0.2),
+                      color: const Color(0xff2F3E46).withValues(alpha: 0.2),
                     ),
                   ),
                   child: Row(
@@ -501,7 +539,7 @@ class _BudgetOverviewPageState extends State<BudgetOverviewPage> {
 
                 const SizedBox(height: 16),
 
-                // ── Search ─────────────────────────────────────────────
+                // ── Search + Entries Per Page ───────────────────────────
                 Row(
                   children: [
                     Expanded(
@@ -511,12 +549,32 @@ class _BudgetOverviewPageState extends State<BudgetOverviewPage> {
                           prefixIcon: Icon(Icons.search),
                           labelText: 'Search activities…',
                         ),
-                        onChanged: (_) => setState(() {}),
+                        onChanged: (_) => setState(() {
+                          _currentPage = 0;
+                        }),
                       ),
                     ),
                     const SizedBox(width: 16),
+                    const Text('Show:', style: TextStyle(color: Colors.grey)),
+                    const SizedBox(width: 8),
+                    DropdownButton<int>(
+                      value: _rowsPerPage,
+                      items: _rowsPerPageOptions
+                          .map(
+                            (n) => DropdownMenuItem(
+                              value: n,
+                              child: Text('$n entries'),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (v) => setState(() {
+                        _rowsPerPage = v!;
+                        _currentPage = 0;
+                      }),
+                    ),
+                    const SizedBox(width: 16),
                     Text(
-                      '${rows.length} activit${rows.length == 1 ? 'y' : 'ies'}',
+                      '${_filtered.length} activit${_filtered.length == 1 ? 'y' : 'ies'}',
                       style: TextStyle(color: Colors.grey.shade600),
                     ),
                   ],
@@ -583,11 +641,10 @@ class _BudgetOverviewPageState extends State<BudgetOverviewPage> {
                         size: ColumnSize.S,
                       ),
                     ],
-                    rows: rows.asMap().entries.map((entry) {
+                    rows: _pagedRows.asMap().entries.map((entry) {
                       final i = entry.key;
                       final a = entry.value;
                       final isEditing = _editingActivity?.id == a.id;
-
                       return DataRow2(
                         color: WidgetStateProperty.resolveWith((_) {
                           if (isEditing) return Colors.blue.shade50;
@@ -625,7 +682,9 @@ class _BudgetOverviewPageState extends State<BudgetOverviewPage> {
                                 vertical: 3,
                               ),
                               decoration: BoxDecoration(
-                                color: _statusColor(a.status).withOpacity(0.12),
+                                color: _statusColor(
+                                  a.status,
+                                ).withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
@@ -668,6 +727,15 @@ class _BudgetOverviewPageState extends State<BudgetOverviewPage> {
                     }).toList(),
                   ),
                 ),
+
+                // ── Pagination Bar ─────────────────────────────────────
+                _PaginationBar(
+                  currentPage: _currentPage,
+                  totalPages: _totalPages,
+                  totalItems: _filtered.length,
+                  rowsPerPage: _rowsPerPage,
+                  onPageChanged: (p) => setState(() => _currentPage = p),
+                ),
               ],
             ],
           ),
@@ -678,16 +746,46 @@ class _BudgetOverviewPageState extends State<BudgetOverviewPage> {
 
   // ─── Sub-Widgets ──────────────────────────────────────────────────────────
 
+  /// Derives the overall header status from individual activity statuses.
+  /// Severity order (highest wins): At Risk > Ongoing > Not Started > Completed
+  String _aggregateStatus(List<BudgetActivity> activities) {
+    if (activities.isEmpty) return 'Not Started';
+    const severity = {
+      'At Risk': 3,
+      'Ongoing': 2,
+      'Not Started': 1,
+      'Completed': 0,
+    };
+    final statuses = activities.map((a) => a.status);
+    final highest = statuses.reduce(
+      (a, b) => (severity[a] ?? 0) >= (severity[b] ?? 0) ? a : b,
+    );
+    return highest;
+  }
+
+  Color _aggregateStatusColor(String status) {
+    switch (status) {
+      case 'At Risk':
+        return Colors.red.shade700;
+      case 'Ongoing':
+        return Colors.blue.shade700;
+      case 'Completed':
+        return Colors.green.shade700;
+      default:
+        return Colors.grey.shade600;
+    }
+  }
+
   Widget _buildSummaryHeader() {
     final s = widget.appState;
+    final activities = s.activities;
+    final overallStatus = _aggregateStatus(activities);
     return Row(
       children: [
         _summaryTile(
           'Current Status',
-          s.totalBalance >= 0 ? 'On Track' : 'At Risk',
-          color: s.totalBalance >= 0
-              ? Colors.green.shade700
-              : Colors.red.shade700,
+          overallStatus,
+          color: _aggregateStatusColor(overallStatus),
         ),
         const SizedBox(width: 12),
         _summaryTile('Total AR Amount', CurrencyFormatter.format(s.totalAR)),
@@ -771,6 +869,142 @@ class _BudgetOverviewPageState extends State<BudgetOverviewPage> {
           style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
         ),
       ],
+    );
+  }
+}
+
+// ─── Reusable Pagination Bar ─────────────────────────────────────────────────
+
+class _PaginationBar extends StatelessWidget {
+  final int currentPage;
+  final int totalPages;
+  final int totalItems;
+  final int rowsPerPage;
+  final void Function(int) onPageChanged;
+
+  const _PaginationBar({
+    required this.currentPage,
+    required this.totalPages,
+    required this.totalItems,
+    required this.rowsPerPage,
+    required this.onPageChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final start = totalItems == 0 ? 0 : currentPage * rowsPerPage + 1;
+    final end = ((currentPage + 1) * rowsPerPage).clamp(0, totalItems);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        border: Border(top: BorderSide(color: Colors.grey.shade200)),
+      ),
+      child: Row(
+        children: [
+          Text(
+            'Showing $start–$end of $totalItems entries',
+            style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+          ),
+          const Spacer(),
+          IconButton(
+            icon: const Icon(Icons.first_page),
+            tooltip: 'First page',
+            onPressed: currentPage > 0 ? () => onPageChanged(0) : null,
+            iconSize: 20,
+          ),
+          IconButton(
+            icon: const Icon(Icons.chevron_left),
+            tooltip: 'Previous page',
+            onPressed: currentPage > 0
+                ? () => onPageChanged(currentPage - 1)
+                : null,
+            iconSize: 20,
+          ),
+          ...List.generate(totalPages, (i) => i)
+              .where(
+                (i) =>
+                    i == 0 ||
+                    i == totalPages - 1 ||
+                    (i - currentPage).abs() <= 1,
+              )
+              .fold<List<Widget>>([], (acc, i) {
+                if (acc.isNotEmpty) {
+                  final prev =
+                      int.tryParse(
+                        (acc.last as dynamic)?.key?.toString() ?? '',
+                      ) ??
+                      -999;
+                  if (i - prev > 1) {
+                    acc.add(
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Text(
+                          '…',
+                          style: TextStyle(color: Colors.grey.shade500),
+                        ),
+                      ),
+                    );
+                  }
+                }
+                final isActive = i == currentPage;
+                acc.add(
+                  Padding(
+                    key: ValueKey(i),
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: InkWell(
+                      onTap: () => onPageChanged(i),
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: isActive
+                              ? const Color(0xff2F3E46)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: isActive
+                                ? const Color(0xff2F3E46)
+                                : Colors.grey.shade300,
+                          ),
+                        ),
+                        child: Text(
+                          '${i + 1}',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: isActive
+                                ? Colors.white
+                                : Colors.grey.shade700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+                return acc;
+              }),
+          IconButton(
+            icon: const Icon(Icons.chevron_right),
+            tooltip: 'Next page',
+            onPressed: currentPage < totalPages - 1
+                ? () => onPageChanged(currentPage + 1)
+                : null,
+            iconSize: 20,
+          ),
+          IconButton(
+            icon: const Icon(Icons.last_page),
+            tooltip: 'Last page',
+            onPressed: currentPage < totalPages - 1
+                ? () => onPageChanged(totalPages - 1)
+                : null,
+            iconSize: 20,
+          ),
+        ],
+      ),
     );
   }
 }

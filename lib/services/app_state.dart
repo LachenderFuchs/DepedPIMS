@@ -14,9 +14,11 @@ class AppState extends ChangeNotifier {
 
   List<WFPEntry> _wfpEntries = [];
   List<BudgetActivity> _activities = [];
+  List<BudgetActivity> _allActivities = []; // cross-WFP, for dashboard totals
   WFPEntry? _selectedWFP;
   bool _isLoading = false;
   String? _error;
+  int _totalActivityCount = 0;
 
   // ─── Public getters ──────────────────────────────────────────────────────
 
@@ -35,6 +37,12 @@ class AppState extends ChangeNotifier {
   /// Last error message, or null if no error.
   String? get error => _error;
 
+  /// Total number of budget activities across all WFP entries.
+  int get totalActivityCount => _totalActivityCount;
+
+  /// All budget activities across every WFP (for dashboard charts and totals).
+  List<BudgetActivity> get allActivities => List.unmodifiable(_allActivities);
+
   // ─── Init ────────────────────────────────────────────────────────────────
 
   /// Call once at startup (in main.dart) to pre-load WFP entries.
@@ -42,6 +50,8 @@ class AppState extends ChangeNotifier {
     _setLoading(true);
     try {
       _wfpEntries = await DatabaseHelper.getAllWFPs();
+      _totalActivityCount = await DatabaseHelper.countAllActivities();
+      _allActivities = await DatabaseHelper.getAllActivities();
       _error = null;
     } catch (e) {
       _error = 'Failed to load WFP entries: $e';
@@ -102,6 +112,8 @@ class AppState extends ChangeNotifier {
     try {
       await DatabaseHelper.deleteWFP(id);
       _wfpEntries = await DatabaseHelper.getAllWFPs();
+      _totalActivityCount = await DatabaseHelper.countAllActivities();
+      _allActivities = await DatabaseHelper.getAllActivities();
       // Clear budget overview state if the deleted entry was selected.
       if (_selectedWFP?.id == id) {
         _selectedWFP = null;
@@ -116,6 +128,16 @@ class AppState extends ChangeNotifier {
   }
 
   // ─── Budget Activity Operations ──────────────────────────────────────────
+
+  /// Returns the number of budget activities linked to a given WFP entry.
+  /// Used by the delete confirmation dialog to warn the user.
+  Future<int> getActivityCountForWFP(String wfpId) =>
+      DatabaseHelper.countActivitiesForWFP(wfpId);
+
+  /// Loads activities for a WFP entry WITHOUT changing the selected WFP context.
+  /// Used by the Reports page for preview and export without side effects.
+  Future<List<BudgetActivity>> loadActivitiesForReport(String wfpId) =>
+      DatabaseHelper.getActivitiesForWFP(wfpId);
 
   /// Selects a WFP entry as the active context for Budget Overview,
   /// and loads its activities from the database.
@@ -161,6 +183,8 @@ class AppState extends ChangeNotifier {
           _selectedWFP!.id,
         );
       }
+      _totalActivityCount = await DatabaseHelper.countAllActivities();
+      _allActivities = await DatabaseHelper.getAllActivities();
       _error = null;
     } catch (e) {
       _error = 'Failed to add activity: $e';
@@ -179,6 +203,7 @@ class AppState extends ChangeNotifier {
           _selectedWFP!.id,
         );
       }
+      _allActivities = await DatabaseHelper.getAllActivities();
       _error = null;
     } catch (e) {
       _error = 'Failed to update activity: $e';
@@ -197,6 +222,8 @@ class AppState extends ChangeNotifier {
           _selectedWFP!.id,
         );
       }
+      _totalActivityCount = await DatabaseHelper.countAllActivities();
+      _allActivities = await DatabaseHelper.getAllActivities();
       _error = null;
     } catch (e) {
       _error = 'Failed to delete activity: $e';
@@ -205,12 +232,22 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  // ─── Computed Budget Totals ───────────────────────────────────────────────
+  // ─── Computed Budget Totals (selected WFP only) ───────────────────────────
 
   double get totalAR => _activities.fold(0, (s, a) => s + a.total);
   double get totalObligated => _activities.fold(0, (s, a) => s + a.projected);
   double get totalDisbursed => _activities.fold(0, (s, a) => s + a.disbursed);
   double get totalBalance => _activities.fold(0, (s, a) => s + a.balance);
+
+  // ─── Cross-WFP Dashboard Totals (all activities) ─────────────────────────
+
+  /// Total disbursed amount across ALL WFP entries (for dashboard stat card).
+  double get dashboardTotalDisbursed =>
+      _allActivities.fold(0, (s, a) => s + a.disbursed);
+
+  /// Total balance across ALL WFP entries (for dashboard stat card).
+  double get dashboardTotalBalance =>
+      _allActivities.fold(0, (s, a) => s + a.balance);
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
