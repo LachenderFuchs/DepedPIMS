@@ -25,6 +25,10 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   int _pageIndex = 0;
 
+  // ── IMPORTANT: pages are created ONCE here, not inside build().
+  // IndexedStack keeps all three widgets alive in the tree at all times,
+  // so their State objects (and local controllers) are never destroyed
+  // when the user switches between sections.
   late final List<Widget> _pages;
 
   @override
@@ -90,6 +94,8 @@ class _DashboardPageState extends State<DashboardPage> {
       body: Row(
         children: [
           Sidebar(currentIndex: _pageIndex, onSelect: _onSidebarSelect, appState: widget.appState),
+          // IndexedStack renders all pages but only shows the active one.
+          // This keeps each page's State alive — no resets on tab switch.
           Expanded(
             child: IndexedStack(index: _pageIndex, children: _pages),
           ),
@@ -118,9 +124,11 @@ class _DashboardHome extends StatelessWidget {
 
         return LayoutBuilder(
           builder: (context, constraints) {
+            // Stack columns when window is narrow, side-by-side when wide
             final wide = constraints.maxWidth > 700;
             final cardGap = wide ? 16.0 : 8.0;
 
+            // Stat cards: 2 per row on narrow, 4 on wide
             Widget statCards = wide
                 ? Column(children: [
                     Row(children: [
@@ -187,7 +195,7 @@ class _DashboardHome extends StatelessWidget {
                       const SizedBox(width: 20),
                       Expanded(child: Column(children: [
                         _PanelCard(icon: Icons.account_balance_wallet, title: 'Budget Overview',
-                          subtitle: 'Total: \${CurrencyFormatter.format(totalBudget)}',
+                          subtitle: 'Total: ${CurrencyFormatter.format(totalBudget)}',
                           color: const Color(0xff3A7CA5), onTap: () => onNavigate(2)),
                         const SizedBox(height: 8),
                         _ActivityMiniList(activities: allActivities),
@@ -202,7 +210,7 @@ class _DashboardHome extends StatelessWidget {
                     _WFPMiniList(entries: entries, onNavigate: onNavigate),
                     const SizedBox(height: 16),
                     _PanelCard(icon: Icons.account_balance_wallet, title: 'Budget Overview',
-                      subtitle: 'Total: \${CurrencyFormatter.format(totalBudget)}',
+                      subtitle: 'Total: ${CurrencyFormatter.format(totalBudget)}',
                       color: const Color(0xff3A7CA5), onTap: () => onNavigate(2)),
                     const SizedBox(height: 8),
                     _ActivityMiniList(activities: allActivities),
@@ -254,6 +262,7 @@ class _WFPMiniList extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
             child: Row(
               children: [
+                // ID
                 SizedBox(
                   width: 110,
                   child: Text(
@@ -266,6 +275,7 @@ class _WFPMiniList extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                // Title
                 Expanded(
                   child: Text(
                     e.title,
@@ -274,6 +284,7 @@ class _WFPMiniList extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
+                // Fund Type badge
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
@@ -286,6 +297,7 @@ class _WFPMiniList extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
+                // Amount
                 SizedBox(
                   width: 100,
                   child: Text(
@@ -300,6 +312,7 @@ class _WFPMiniList extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
+                // Year
                 SizedBox(
                   width: 36,
                   child: Text(
@@ -344,6 +357,7 @@ class _ActivityMiniList extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
           child: Row(
             children: [
+              // Activity ID
               SizedBox(
                 width: 110,
                 child: Text(
@@ -356,6 +370,7 @@ class _ActivityMiniList extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              // Name
               Expanded(
                 child: Text(
                   a.name,
@@ -364,6 +379,7 @@ class _ActivityMiniList extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
+              // Status badge
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
@@ -380,6 +396,7 @@ class _ActivityMiniList extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
+              // Total AR Amount
               SizedBox(
                 width: 100,
                 child: Text(
@@ -464,6 +481,7 @@ class _BudgetVsDisbursedChart extends StatefulWidget {
 class _BudgetVsDisbursedChartState extends State<_BudgetVsDisbursedChart> {
   int? _hoveredIndex;
 
+  // Format large numbers compactly: 1,500,000 → ₱1.5M
   String _compact(double v) {
     if (v >= 1000000) return '₱${(v / 1000000).toStringAsFixed(1)}M';
     if (v >= 1000)    return '₱${(v / 1000).toStringAsFixed(0)}K';
@@ -489,8 +507,8 @@ class _BudgetVsDisbursedChartState extends State<_BudgetVsDisbursedChart> {
     const maxBarHeight = 120.0;
     const yAxisWidth   = 52.0;
     const xLabelHeight = 32.0;
-    const tooltipH     = 100.0; // increased from 80 to prevent overflow
-    const kChartBuffer = 10.0;  // safety threshold
+    const tooltipH     = 100.0; // increased to prevent tooltip overflow
+    const kChartBuffer = 10.0;  // safety buffer
 
     return Card(
       elevation: 2,
@@ -501,6 +519,7 @@ class _BudgetVsDisbursedChartState extends State<_BudgetVsDisbursedChart> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Title + legend using Wrap so it reflows on narrow widths
             Wrap(
               spacing: 14,
               runSpacing: 6,
@@ -527,11 +546,13 @@ class _BudgetVsDisbursedChartState extends State<_BudgetVsDisbursedChart> {
             ),
             const SizedBox(height: 12),
 
+            // Fixed-height chart area — all children explicitly positioned
             SizedBox(
               height: tooltipH + maxBarHeight + xLabelHeight + kChartBuffer,
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Y-axis labels (offset into tooltip zone)
                   SizedBox(
                     width: yAxisWidth,
                     height: tooltipH + maxBarHeight,
@@ -552,12 +573,14 @@ class _BudgetVsDisbursedChartState extends State<_BudgetVsDisbursedChart> {
                       }),
                     ),
                   ),
+                  // Bars area — Stack sized to full chart height so Positioned children work correctly
                   Expanded(
                     child: SizedBox(
                       height: tooltipH + maxBarHeight + xLabelHeight + kChartBuffer,
                       child: Stack(
                         clipBehavior: Clip.none,
                         children: [
+                        // Gridlines
                         ...List.generate(gridLines + 1, (i) {
                           final topPx = tooltipH + (i / gridLines) * maxBarHeight;
                           return Positioned(
@@ -566,6 +589,7 @@ class _BudgetVsDisbursedChartState extends State<_BudgetVsDisbursedChart> {
                             child: Divider(height: 1, color: Colors.grey.shade200),
                           );
                         }),
+                        // Bar columns — positioned to cover only tooltip + bar zone, not x-label zone
                         Positioned(
                           top: 0,
                           left: 0,
@@ -593,6 +617,7 @@ class _BudgetVsDisbursedChartState extends State<_BudgetVsDisbursedChart> {
                                     mainAxisSize: MainAxisSize.max,
                                     mainAxisAlignment: MainAxisAlignment.end,
                                     children: [
+                                      // Tooltip area — fixed height, only visible on hover
                                       SizedBox(
                                         height: tooltipH,
                                         child: isHovered
@@ -647,6 +672,7 @@ class _BudgetVsDisbursedChartState extends State<_BudgetVsDisbursedChart> {
                                               )
                                             : null,
                                       ),
+                                      // Three bars — sit at the very bottom of the tooltip+bar zone
                                       Row(
                                         crossAxisAlignment: CrossAxisAlignment.end,
                                         mainAxisAlignment: MainAxisAlignment.center,
@@ -665,6 +691,7 @@ class _BudgetVsDisbursedChartState extends State<_BudgetVsDisbursedChart> {
                             }).toList(),
                           ),
                         ),
+                        // X-axis labels — positioned below the bar zone
                         Positioned(
                           top: tooltipH + maxBarHeight,
                           left: 0,
@@ -776,6 +803,7 @@ class _FundTypeDistributionChart extends StatelessWidget {
 
   const _FundTypeDistributionChart({required this.entries});
 
+  // Consistent color palette for up to 13 fund types
   static const _palette = [
     Color(0xff2F3E46),
     Color(0xff3A7CA5),
@@ -794,11 +822,13 @@ class _FundTypeDistributionChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Aggregate total amount per fund type
     final totals = <String, double>{};
     for (final e in entries) {
       totals[e.fundType] = (totals[e.fundType] ?? 0) + e.amount;
     }
 
+    // Sort descending by amount
     final sorted = totals.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 

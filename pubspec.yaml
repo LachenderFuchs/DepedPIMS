@@ -21,6 +21,7 @@ dependencies:
   url_launcher: ^6.3.0
   shared_preferences: ^2.3.0
   window_manager: ^0.3.9
+  pdf: ^3.11.1
 
   # Required for stable DB file path on Windows
   path_provider: ^2.1.2

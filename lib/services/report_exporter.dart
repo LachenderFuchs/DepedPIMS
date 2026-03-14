@@ -279,4 +279,215 @@ class ReportExporter {
 
     return filePath;
   }
+
+  // ─── Grouped Export ───────────────────────────────────────────────────────
+  /// Exports multiple WFP entries stacked vertically in one Excel sheet.
+  /// [groupLabel] is used in the filename (e.g. "2026" or "MODE").
+  static Future<String> exportGroupedReport({
+    required List<WFPEntry> wfps,
+    required Map<String, List<BudgetActivity>> activitiesMap,
+    required String groupLabel,
+  }) async {
+    final excel = Excel.createExcel();
+    excel.rename('Sheet1', 'Grouped Report');
+    final sheet = excel['Grouped Report'];
+
+    // ── Styles (same as single report) ────────────────────────────────────
+    final titleStyle = CellStyle(
+      bold: true, fontSize: 14,
+      fontColorHex: ExcelColor.fromHexString('#FFFFFF'),
+      backgroundColorHex: ExcelColor.fromHexString('#2F3E46'),
+      horizontalAlign: HorizontalAlign.Center,
+    );
+    final headerLabelStyle = CellStyle(
+      bold: true, fontSize: 10,
+      fontColorHex: ExcelColor.fromHexString('#2F3E46'),
+      backgroundColorHex: ExcelColor.fromHexString('#E8EEF2'),
+    );
+    final headerValueStyle = CellStyle(fontSize: 10);
+    final sectionHeaderStyle = CellStyle(
+      bold: true, fontSize: 10,
+      fontColorHex: ExcelColor.fromHexString('#FFFFFF'),
+      backgroundColorHex: ExcelColor.fromHexString('#3A7CA5'),
+    );
+    final colHeaderStyle = CellStyle(
+      bold: true, fontSize: 10,
+      fontColorHex: ExcelColor.fromHexString('#FFFFFF'),
+      backgroundColorHex: ExcelColor.fromHexString('#2F3E46'),
+      horizontalAlign: HorizontalAlign.Center,
+    );
+    final dataStyle      = CellStyle(fontSize: 10);
+    final currencyStyle  = CellStyle(fontSize: 10,
+      numberFormat: NumFormat.custom(formatCode: '₱#,##0.00'));
+    final totalLabelStyle = CellStyle(bold: true, fontSize: 10,
+      backgroundColorHex: ExcelColor.fromHexString('#E8EEF2'));
+    final totalCurrencyStyle = CellStyle(bold: true, fontSize: 10,
+      backgroundColorHex: ExcelColor.fromHexString('#E8EEF2'),
+      numberFormat: NumFormat.custom(formatCode: '₱#,##0.00'));
+    final dividerStyle = CellStyle(
+      backgroundColorHex: ExcelColor.fromHexString('#2F3E46'));
+    final grandTotalLabelStyle = CellStyle(
+      bold: true, fontSize: 11,
+      backgroundColorHex: ExcelColor.fromHexString('#2F3E46'),
+      fontColorHex: ExcelColor.fromHexString('#FFFFFF'));
+    final grandTotalCurrencyStyle = CellStyle(
+      bold: true, fontSize: 11,
+      backgroundColorHex: ExcelColor.fromHexString('#2F3E46'),
+      fontColorHex: ExcelColor.fromHexString('#FFFFFF'),
+      numberFormat: NumFormat.custom(formatCode: '₱#,##0.00'));
+
+    void setCell(int row, int col, dynamic value, CellStyle style) {
+      final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: row));
+      if (value is double)      cell.value = DoubleCellValue(value);
+      else if (value is int)    cell.value = IntCellValue(value);
+      else                      cell.value = TextCellValue(value?.toString() ?? '');
+      cell.cellStyle = style;
+    }
+
+    sheet.setColumnWidth(0, 28);
+    sheet.setColumnWidth(1, 36);
+    sheet.setColumnWidth(2, 20);
+    sheet.setColumnWidth(3, 22);
+    sheet.setColumnWidth(4, 20);
+    sheet.setColumnWidth(5, 20);
+    sheet.setColumnWidth(6, 16);
+
+    // ── Title row ─────────────────────────────────────────────────────────
+    sheet.merge(
+      CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0),
+      CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: 0),
+    );
+    setCell(0, 0, 'GROUPED SUMMARY REPORT — $groupLabel', titleStyle);
+    sheet.setRowHeight(0, 28);
+    sheet.setRowHeight(1, 6);
+
+    // Grand totals accumulators
+    double grandAR = 0, grandProjected = 0, grandDisbursed = 0, grandBalance = 0;
+
+    int currentRow = 2;
+
+    for (final wfp in wfps) {
+      final activities = activitiesMap[wfp.id] ?? [];
+      final realAR        = activities.fold<double>(0, (s, a) => s + a.total);
+      final realProjected = activities.fold<double>(0, (s, a) => s + a.projected);
+      final realDisbursed = activities.fold<double>(0, (s, a) => s + a.disbursed);
+      final realBalance   = activities.fold<double>(0, (s, a) => s + a.balance);
+
+      grandAR        += realAR;
+      grandProjected += realProjected;
+      grandDisbursed += realDisbursed;
+      grandBalance   += realBalance;
+
+      // WFP section header bar
+      sheet.merge(
+        CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow),
+        CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: currentRow),
+      );
+      setCell(currentRow, 0, '${wfp.id}  —  ${wfp.title}  [${wfp.fundType}  ${wfp.year}]', sectionHeaderStyle);
+      sheet.setRowHeight(currentRow, 22);
+      currentRow++;
+
+      // Header block
+      setCell(currentRow, 0, 'Operating Unit:', headerLabelStyle);
+      setCell(currentRow, 1, 'Department of Education', headerValueStyle);
+      setCell(currentRow, 3, 'Type Fund:', headerLabelStyle);
+      setCell(currentRow, 4, wfp.fundType, headerValueStyle);
+      currentRow++;
+
+      setCell(currentRow, 0, 'Program:', headerLabelStyle);
+      setCell(currentRow, 1, wfp.title, headerValueStyle);
+      setCell(currentRow, 3, 'Approval:', headerLabelStyle);
+      setCell(currentRow, 4, wfp.approvalStatus, headerValueStyle);
+      currentRow++;
+
+      setCell(currentRow, 0, 'Indicator:', headerLabelStyle);
+      sheet.merge(
+        CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: currentRow),
+        CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: currentRow),
+      );
+      setCell(currentRow, 1, wfp.indicator, headerValueStyle);
+      if (wfp.dueDate != null) {
+        setCell(currentRow, 3, 'Due Date:', headerLabelStyle);
+        setCell(currentRow, 4, wfp.dueDate!, headerValueStyle);
+      }
+      currentRow++;
+
+      // Financial summary
+      setCell(currentRow, 0, 'Total AR Amount:', headerLabelStyle);
+      setCell(currentRow, 2, realAR, totalCurrencyStyle);
+      currentRow++;
+      setCell(currentRow, 0, 'Total AR Projected / Obligated:', headerLabelStyle);
+      setCell(currentRow, 2, realProjected, totalCurrencyStyle);
+      currentRow++;
+      setCell(currentRow, 0, 'Total AR Disbursed:', headerLabelStyle);
+      setCell(currentRow, 2, realDisbursed, totalCurrencyStyle);
+      currentRow++;
+      setCell(currentRow, 0, 'Total AR Balance:', headerLabelStyle);
+      setCell(currentRow, 2, realBalance, totalCurrencyStyle);
+      currentRow++;
+
+      // Activities table
+      if (activities.isNotEmpty) {
+        currentRow++; // blank spacer
+
+        // Column headers
+        const colHeaders = [
+          'Activity ID', 'Activity Name', 'Total AR Amount (₱)',
+          'Projected / Obligated (₱)', 'Disbursed Amount (₱)', 'Balance (₱)', 'Status',
+        ];
+        for (var c = 0; c < colHeaders.length; c++) {
+          setCell(currentRow, c, colHeaders[c], colHeaderStyle);
+        }
+        currentRow++;
+
+        for (final a in activities) {
+          setCell(currentRow, 0, a.id, dataStyle);
+          setCell(currentRow, 1, a.name, dataStyle);
+          setCell(currentRow, 2, a.total, currencyStyle);
+          setCell(currentRow, 3, a.projected, currencyStyle);
+          setCell(currentRow, 4, a.disbursed, currencyStyle);
+          setCell(currentRow, 5, a.balance, currencyStyle);
+          setCell(currentRow, 6, a.status, dataStyle);
+          currentRow++;
+        }
+
+        // Subtotal row
+        setCell(currentRow, 0, 'SUBTOTAL', totalLabelStyle);
+        setCell(currentRow, 2, realAR,        totalCurrencyStyle);
+        setCell(currentRow, 3, realProjected, totalCurrencyStyle);
+        setCell(currentRow, 4, realDisbursed, totalCurrencyStyle);
+        setCell(currentRow, 5, realBalance,   totalCurrencyStyle);
+        currentRow++;
+      }
+
+      // Divider row between WFP sections
+      for (var c = 0; c <= 6; c++) {
+        setCell(currentRow, c, '', dividerStyle);
+      }
+      sheet.setRowHeight(currentRow, 4);
+      currentRow += 2; // divider + blank
+    }
+
+    // ── Grand Total row ───────────────────────────────────────────────────
+    setCell(currentRow, 0, 'GRAND TOTAL', grandTotalLabelStyle);
+    setCell(currentRow, 1, '${wfps.length} WFP entr${wfps.length == 1 ? 'y' : 'ies'}',
+        grandTotalLabelStyle);
+    setCell(currentRow, 2, grandAR,        grandTotalCurrencyStyle);
+    setCell(currentRow, 3, grandProjected, grandTotalCurrencyStyle);
+    setCell(currentRow, 4, grandDisbursed, grandTotalCurrencyStyle);
+    setCell(currentRow, 5, grandBalance,   grandTotalCurrencyStyle);
+    setCell(currentRow, 6, '',             grandTotalLabelStyle);
+
+    // ── Save ──────────────────────────────────────────────────────────────
+    final dir = await getApplicationDocumentsDirectory();
+    final safeLabel = groupLabel.replaceAll(RegExp(r'[<>:\"/\\|?*]'), '_');
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    final fileName = 'GroupedReport_${safeLabel}_$ts.xlsx';
+    final filePath = p.join(dir.path, fileName);
+
+    final bytes = excel.encode();
+    if (bytes == null) throw Exception('Failed to encode Excel file.');
+    await File(filePath).writeAsBytes(bytes);
+    return filePath;
+  }
 }
