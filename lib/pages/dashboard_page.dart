@@ -7,6 +7,7 @@ import '../widgets/summary_card.dart';
 import 'wfp_management_page.dart';
 import 'budget_overview_page.dart';
 import 'reports_page.dart';
+import 'deadlines_page.dart';
 import 'settings_page.dart';
 import 'profile_page.dart';
 import 'login_page.dart';
@@ -24,10 +25,6 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   int _pageIndex = 0;
 
-  // ── IMPORTANT: pages are created ONCE here, not inside build().
-  // IndexedStack keeps all three widgets alive in the tree at all times,
-  // so their State objects (and local controllers) are never destroyed
-  // when the user switches between sections.
   late final List<Widget> _pages;
 
   @override
@@ -41,13 +38,14 @@ class _DashboardPageState extends State<DashboardPage> {
       WFPManagementPage(appState: widget.appState),
       BudgetOverviewPage(appState: widget.appState),
       ReportsPage(appState: widget.appState),
-      const SettingsPage(),
+      DeadlinesPage(appState: widget.appState),
+      SettingsPage(appState: widget.appState),
       const ProfilePage(),
     ];
   }
 
   void _onSidebarSelect(int index) {
-    if (index == 6) {
+    if (index == 7) {
       _confirmLogout();
       return;
     }
@@ -91,9 +89,7 @@ class _DashboardPageState extends State<DashboardPage> {
     return Scaffold(
       body: Row(
         children: [
-          Sidebar(currentIndex: _pageIndex, onSelect: _onSidebarSelect),
-          // IndexedStack renders all pages but only shows the active one.
-          // This keeps each page's State alive — no resets on tab switch.
+          Sidebar(currentIndex: _pageIndex, onSelect: _onSidebarSelect, appState: widget.appState),
           Expanded(
             child: IndexedStack(index: _pageIndex, children: _pages),
           ),
@@ -120,159 +116,117 @@ class _DashboardHome extends StatelessWidget {
         final allActivities = appState.allActivities;
         final totalBudget = entries.fold<double>(0, (s, e) => s + e.amount);
 
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Title ──────────────────────────────────────────────────
-              const Text(
-                'Dashboard',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xff2F3E46),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Welcome to PIMS DepED',
-                style: TextStyle(color: Colors.grey.shade600),
-              ),
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final wide = constraints.maxWidth > 700;
+            final cardGap = wide ? 16.0 : 8.0;
 
-              const SizedBox(height: 24),
+            Widget statCards = wide
+                ? Column(children: [
+                    Row(children: [
+                      Expanded(child: SummaryCard(title: 'Total WFP Entries', value: entries.length.toString())),
+                      SizedBox(width: cardGap),
+                      Expanded(child: SummaryCard(title: 'Total WFP Budget', value: CurrencyFormatter.format(totalBudget))),
+                      SizedBox(width: cardGap),
+                      Expanded(child: SummaryCard(title: 'Fund Types Used', value: entries.map((e) => e.fundType).toSet().length.toString())),
+                      SizedBox(width: cardGap),
+                      Expanded(child: SummaryCard(title: 'Total Activities', value: appState.totalActivityCount.toString())),
+                    ]),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      Expanded(child: SummaryCard(title: 'Total Disbursed', value: CurrencyFormatter.format(appState.dashboardTotalDisbursed))),
+                      SizedBox(width: cardGap),
+                      Expanded(child: SummaryCard(title: 'Total Balance', value: CurrencyFormatter.format(appState.dashboardTotalBalance))),
+                      SizedBox(width: cardGap),
+                      const Expanded(child: SizedBox()),
+                      SizedBox(width: cardGap),
+                      const Expanded(child: SizedBox()),
+                    ]),
+                  ])
+                : Wrap(
+                    spacing: cardGap,
+                    runSpacing: cardGap,
+                    children: [
+                      SizedBox(width: (constraints.maxWidth - cardGap) / 2 - 1,
+                        child: SummaryCard(title: 'Total WFP Entries', value: entries.length.toString())),
+                      SizedBox(width: (constraints.maxWidth - cardGap) / 2 - 1,
+                        child: SummaryCard(title: 'Total WFP Budget', value: CurrencyFormatter.format(totalBudget))),
+                      SizedBox(width: (constraints.maxWidth - cardGap) / 2 - 1,
+                        child: SummaryCard(title: 'Fund Types Used', value: entries.map((e) => e.fundType).toSet().length.toString())),
+                      SizedBox(width: (constraints.maxWidth - cardGap) / 2 - 1,
+                        child: SummaryCard(title: 'Total Activities', value: appState.totalActivityCount.toString())),
+                      SizedBox(width: (constraints.maxWidth - cardGap) / 2 - 1,
+                        child: SummaryCard(title: 'Total Disbursed', value: CurrencyFormatter.format(appState.dashboardTotalDisbursed))),
+                      SizedBox(width: (constraints.maxWidth - cardGap) / 2 - 1,
+                        child: SummaryCard(title: 'Total Balance', value: CurrencyFormatter.format(appState.dashboardTotalBalance))),
+                    ],
+                  );
 
-              // ── Stat cards ─────────────────────────────────────────────
-              Row(
-                children: [
-                  Expanded(
-                    child: SummaryCard(
-                      title: 'Total WFP Entries',
-                      value: entries.length.toString(),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: SummaryCard(
-                      title: 'Total WFP Budget',
-                      value: CurrencyFormatter.format(totalBudget),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: SummaryCard(
-                      title: 'Fund Types Used',
-                      value: entries
-                          .map((e) => e.fundType)
-                          .toSet()
-                          .length
-                          .toString(),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: SummaryCard(
-                      title: 'Total Activities',
-                      value: appState.totalActivityCount.toString(),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: SummaryCard(
-                      title: 'Total Disbursed',
-                      value: CurrencyFormatter.format(
-                        appState.dashboardTotalDisbursed,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: SummaryCard(
-                      title: 'Total Balance',
-                      value: CurrencyFormatter.format(
-                        appState.dashboardTotalBalance,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  const Expanded(child: SizedBox()),
-                  const SizedBox(width: 16),
-                  const Expanded(child: SizedBox()),
-                ],
-              ),
+            // Charts always stacked vertically — bar chart on top, fund type below
+            Widget chartsRow = entries.isEmpty
+                ? const SizedBox()
+                : Column(
+                    children: [
+                      _BudgetVsDisbursedChart(entries: entries, allActivities: allActivities),
+                      const SizedBox(height: 16),
+                      _FundTypeDistributionChart(entries: entries),
+                    ],
+                  );
 
-              const SizedBox(height: 28),
-
-              // ── Charts row ─────────────────────────────────────────────
-              if (entries.isNotEmpty) ...[
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Bar chart: Budget vs Disbursed per WFP
-                    Expanded(
-                      flex: 3,
-                      child: _BudgetVsDisbursedChart(
-                        entries: entries,
-                        allActivities: allActivities,
-                      ),
-                    ),
-                    const SizedBox(width: 20),
-                    // Bar/pie: Fund type distribution by total amount
-                    Expanded(
-                      flex: 2,
-                      child: _FundTypeDistributionChart(entries: entries),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 28),
-              ],
-
-              // ── Panel cards + mini-lists ────────────────────────────────
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // WFP panel
-                  Expanded(
-                    child: Column(
-                      children: [
-                        _PanelCard(
-                          icon: Icons.list_alt,
-                          title: 'WFP Management',
+            Widget panelsRow = wide
+                ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: Column(children: [
+                        _PanelCard(icon: Icons.list_alt, title: 'WFP Management',
                           subtitle: '${entries.length} WFP entries recorded',
-                          color: const Color(0xff2F3E46),
-                          onTap: () => onNavigate(1),
-                        ),
+                          color: const Color(0xff2F3E46), onTap: () => onNavigate(1)),
                         const SizedBox(height: 8),
                         _WFPMiniList(entries: entries, onNavigate: onNavigate),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 20),
-                  // Budget panel
-                  Expanded(
-                    child: Column(
-                      children: [
-                        _PanelCard(
-                          icon: Icons.account_balance_wallet,
-                          title: 'Budget Overview',
-                          subtitle:
-                              'Total: ${CurrencyFormatter.format(totalBudget)}',
-                          color: const Color(0xff3A7CA5),
-                          onTap: () => onNavigate(2),
-                        ),
+                      ])),
+                      const SizedBox(width: 20),
+                      Expanded(child: Column(children: [
+                        _PanelCard(icon: Icons.account_balance_wallet, title: 'Budget Overview',
+                          subtitle: 'Total: \${CurrencyFormatter.format(totalBudget)}',
+                          color: const Color(0xff3A7CA5), onTap: () => onNavigate(2)),
                         const SizedBox(height: 8),
                         _ActivityMiniList(activities: allActivities),
-                      ],
-                    ),
-                  ),
+                      ])),
+                    ],
+                  )
+                : Column(children: [
+                    _PanelCard(icon: Icons.list_alt, title: 'WFP Management',
+                      subtitle: '${entries.length} WFP entries recorded',
+                      color: const Color(0xff2F3E46), onTap: () => onNavigate(1)),
+                    const SizedBox(height: 8),
+                    _WFPMiniList(entries: entries, onNavigate: onNavigate),
+                    const SizedBox(height: 16),
+                    _PanelCard(icon: Icons.account_balance_wallet, title: 'Budget Overview',
+                      subtitle: 'Total: \${CurrencyFormatter.format(totalBudget)}',
+                      color: const Color(0xff3A7CA5), onTap: () => onNavigate(2)),
+                    const SizedBox(height: 8),
+                    _ActivityMiniList(activities: allActivities),
+                  ]);
+
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Dashboard',
+                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xff2F3E46))),
+                  const SizedBox(height: 4),
+                  Text('Welcome to PIMS DepED', style: TextStyle(color: Colors.grey.shade600)),
+                  const SizedBox(height: 24),
+                  statCards,
+                  const SizedBox(height: 28),
+                  chartsRow,
+                  if (entries.isNotEmpty) const SizedBox(height: 28),
+                  panelsRow,
                 ],
               ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
@@ -300,7 +254,6 @@ class _WFPMiniList extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
             child: Row(
               children: [
-                // ID
                 SizedBox(
                   width: 110,
                   child: Text(
@@ -313,32 +266,26 @@ class _WFPMiniList extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                // Title
                 Expanded(
                   child: Text(
                     e.title,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 const SizedBox(width: 8),
-                // Fund Type badge
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
                     color: const Color(0xff2F3E46).withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: Text(e.fundType, style: const TextStyle(fontSize: 10)),
+                  child: Text(
+                    e.fundType,
+                    style: const TextStyle(fontSize: 10),
+                  ),
                 ),
                 const SizedBox(width: 8),
-                // Amount
                 SizedBox(
                   width: 100,
                   child: Text(
@@ -353,7 +300,6 @@ class _WFPMiniList extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                // Year
                 SizedBox(
                   width: 36,
                   child: Text(
@@ -380,14 +326,10 @@ class _ActivityMiniList extends StatelessWidget {
 
   Color _statusColor(String status) {
     switch (status) {
-      case 'Completed':
-        return Colors.green.shade600;
-      case 'Ongoing':
-        return Colors.blue.shade600;
-      case 'At Risk':
-        return Colors.red.shade600;
-      default:
-        return Colors.grey.shade500;
+      case 'Completed': return Colors.green.shade600;
+      case 'Ongoing':   return Colors.blue.shade600;
+      case 'At Risk':   return Colors.red.shade600;
+      default:          return Colors.grey.shade500;
     }
   }
 
@@ -402,7 +344,6 @@ class _ActivityMiniList extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
           child: Row(
             children: [
-              // Activity ID
               SizedBox(
                 width: 110,
                 child: Text(
@@ -415,19 +356,14 @@ class _ActivityMiniList extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              // Name
               Expanded(
                 child: Text(
                   a.name,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
               const SizedBox(width: 8),
-              // Status badge
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
@@ -444,15 +380,11 @@ class _ActivityMiniList extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              // Total AR Amount
               SizedBox(
                 width: 100,
                 child: Text(
                   CurrencyFormatter.format(a.total),
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                   textAlign: TextAlign.right,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -485,8 +417,10 @@ class _MiniListCard extends StatelessWidget {
           child: ListView.separated(
             padding: EdgeInsets.zero,
             itemCount: children.length,
-            separatorBuilder: (context, index) =>
-                Divider(height: 1, color: Colors.grey.shade200),
+            separatorBuilder: (context, index) => Divider(
+              height: 1,
+              color: Colors.grey.shade200,
+            ),
             itemBuilder: (_, i) => children[i],
           ),
         ),
@@ -514,7 +448,7 @@ Widget _emptyMiniList(String message) {
 
 // ─── Budget vs Disbursed Bar Chart ────────────────────────────────────────────
 
-class _BudgetVsDisbursedChart extends StatelessWidget {
+class _BudgetVsDisbursedChart extends StatefulWidget {
   final List<WFPEntry> entries;
   final List<BudgetActivity> allActivities;
 
@@ -524,23 +458,39 @@ class _BudgetVsDisbursedChart extends StatelessWidget {
   });
 
   @override
+  State<_BudgetVsDisbursedChart> createState() => _BudgetVsDisbursedChartState();
+}
+
+class _BudgetVsDisbursedChartState extends State<_BudgetVsDisbursedChart> {
+  int? _hoveredIndex;
+
+  String _compact(double v) {
+    if (v >= 1000000) return '₱${(v / 1000000).toStringAsFixed(1)}M';
+    if (v >= 1000)    return '₱${(v / 1000).toStringAsFixed(0)}K';
+    return '₱${v.toStringAsFixed(0)}';
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Compute disbursed per WFP from allActivities
     final disbursedByWfp = <String, double>{};
-    for (final a in allActivities) {
+    for (final a in widget.allActivities) {
       disbursedByWfp[a.wfpId] = (disbursedByWfp[a.wfpId] ?? 0) + a.disbursed;
     }
 
-    // Take the most recent 6 entries to keep the chart readable
-    final chartEntries = entries.length > 6
-        ? entries.sublist(entries.length - 6)
-        : entries;
+    final chartEntries = widget.entries.take(6).toList();
 
-    final maxVal = chartEntries.fold<double>(0, (m, e) {
-      final budget = e.amount;
+    final maxVal = chartEntries.fold<double>(1, (m, e) {
       final disbursed = disbursedByWfp[e.id] ?? 0;
-      return [m, budget, disbursed].reduce((a, b) => a > b ? a : b);
+      return [m, e.amount, disbursed].reduce((a, b) => a > b ? a : b);
     });
+
+    const gridLines    = 4;
+    final yStep        = maxVal / gridLines;
+    const maxBarHeight = 120.0;
+    const yAxisWidth   = 52.0;
+    const xLabelHeight = 32.0;
+    const tooltipH     = 100.0; // increased from 80 to prevent overflow
+    const kChartBuffer = 10.0;  // safety threshold
 
     return Card(
       elevation: 2,
@@ -551,63 +501,202 @@ class _BudgetVsDisbursedChart extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Budget vs Disbursed per WFP',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-            ),
-            const SizedBox(height: 4),
-            Row(
+            Wrap(
+              spacing: 14,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                _Legend(color: const Color(0xff2F3E46), label: 'Budget'),
-                const SizedBox(width: 16),
-                _Legend(color: const Color(0xff3A7CA5), label: 'Disbursed'),
+                const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Total AR Amount vs Disbursed',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Per WFP entry — most recent 6',
+                      style: TextStyle(fontSize: 10, color: Colors.grey),
+                    ),
+                  ],
+                ),
+                _Legend(color: Color(0xff2F3E46), label: 'Total AR'),
+                _Legend(color: Color(0xff3A7CA5), label: 'Disbursed'),
+                _Legend(color: Color(0xff52B788), label: 'Balance'),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
+
             SizedBox(
-              height: 180,
+              height: tooltipH + maxBarHeight + xLabelHeight + kChartBuffer,
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: chartEntries.map((e) {
-                  final budget = e.amount;
-                  final disbursed = disbursedByWfp[e.id] ?? 0;
-                  final budgetRatio = maxVal > 0 ? budget / maxVal : 0.0;
-                  final disbursedRatio = maxVal > 0 ? disbursed / maxVal : 0.0;
-                  return Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              _Bar(
-                                ratio: budgetRatio,
-                                color: const Color(0xff2F3E46),
-                                maxHeight: 140,
-                              ),
-                              const SizedBox(width: 3),
-                              _Bar(
-                                ratio: disbursedRatio,
-                                color: const Color(0xff3A7CA5),
-                                maxHeight: 140,
-                              ),
-                            ],
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: yAxisWidth,
+                    height: tooltipH + maxBarHeight,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: List.generate(gridLines + 1, (i) {
+                        final val   = yStep * (gridLines - i);
+                        final topPx = tooltipH + (i / gridLines) * maxBarHeight;
+                        return Positioned(
+                          top: topPx - 6,
+                          right: 6,
+                          child: Text(
+                            _compact(val),
+                            style: TextStyle(fontSize: 9, color: Colors.grey.shade400),
+                            textAlign: TextAlign.right,
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            e.id.replaceFirst('WFP-', ''),
-                            style: const TextStyle(fontSize: 9),
-                            textAlign: TextAlign.center,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
+                        );
+                      }),
                     ),
-                  );
-                }).toList(),
+                  ),
+                  Expanded(
+                    child: SizedBox(
+                      height: tooltipH + maxBarHeight + xLabelHeight + kChartBuffer,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                        ...List.generate(gridLines + 1, (i) {
+                          final topPx = tooltipH + (i / gridLines) * maxBarHeight;
+                          return Positioned(
+                            top: topPx,
+                            left: 0, right: 0,
+                            child: Divider(height: 1, color: Colors.grey.shade200),
+                          );
+                        }),
+                        Positioned(
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          height: tooltipH + maxBarHeight,
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: chartEntries.asMap().entries.map((mapEntry) {
+                              final idx       = mapEntry.key;
+                              final e         = mapEntry.value;
+                              final budget    = e.amount;
+                              final disbursed = disbursedByWfp[e.id] ?? 0;
+                              final balance   = (budget - disbursed).clamp(0.0, double.infinity) as double;
+                              final isHovered = _hoveredIndex == idx;
+
+                              final budgetH    = maxVal > 0 ? (budget    / maxVal * maxBarHeight).clamp(2.0, maxBarHeight) : 2.0;
+                              final disbursedH = maxVal > 0 ? (disbursed / maxVal * maxBarHeight).clamp(0.0, maxBarHeight) : 0.0;
+                              final balanceH   = maxVal > 0 ? (balance   / maxVal * maxBarHeight).clamp(0.0, maxBarHeight) : 0.0;
+
+                              return Expanded(
+                                child: MouseRegion(
+                                  onEnter:  (_) => setState(() => _hoveredIndex = idx),
+                                  onExit:   (_) => setState(() => _hoveredIndex = null),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.max,
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      SizedBox(
+                                        height: tooltipH,
+                                        child: isHovered
+                                            ? Align(
+                                                alignment: Alignment.bottomCenter,
+                                                child: Container(
+                                                  margin: const EdgeInsets.only(bottom: 4),
+                                                  padding: const EdgeInsets.symmetric(
+                                                    horizontal: 7, vertical: 5,
+                                                  ),
+                                                  constraints: const BoxConstraints(maxWidth: 150),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xff2F3E46),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                    boxShadow: [
+                                                      BoxShadow(
+                                                        color: Colors.black.withValues(alpha: 0.18),
+                                                        blurRadius: 6,
+                                                        offset: const Offset(0, 2),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Text(
+                                                        e.id,
+                                                        style: const TextStyle(
+                                                          color: Colors.white70,
+                                                          fontSize: 8,
+                                                          fontFamily: 'monospace',
+                                                        ),
+                                                      ),
+                                                      Text(
+                                                        e.title,
+                                                        style: const TextStyle(
+                                                          color: Colors.white,
+                                                          fontWeight: FontWeight.bold,
+                                                          fontSize: 9,
+                                                        ),
+                                                        overflow: TextOverflow.ellipsis,
+                                                        maxLines: 1,
+                                                      ),
+                                                      const SizedBox(height: 3),
+                                                      _tooltipRow('Total AR',  budget,    const Color(0xff2F3E46)),
+                                                      _tooltipRow('Disbursed', disbursed, const Color(0xff3A7CA5)),
+                                                      _tooltipRow('Balance',   balance,   const Color(0xff52B788)),
+                                                    ],
+                                                  ),
+                                                ),
+                                              )
+                                            : null,
+                                      ),
+                                      Row(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          _BarRect(height: budgetH,    color: const Color(0xff2F3E46), hovered: isHovered),
+                                          const SizedBox(width: 2),
+                                          _BarRect(height: disbursedH, color: const Color(0xff3A7CA5), hovered: isHovered),
+                                          const SizedBox(width: 2),
+                                          _BarRect(height: balanceH,   color: const Color(0xff52B788), hovered: isHovered),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                        Positioned(
+                          top: tooltipH + maxBarHeight,
+                          left: 0,
+                          right: 0,
+                          height: xLabelHeight,
+                          child: Row(
+                            children: chartEntries.asMap().entries.map((mapEntry) {
+                              final idx       = mapEntry.key;
+                              final e         = mapEntry.value;
+                              final isHovered = _hoveredIndex == idx;
+                              final shortLabel = "${e.fundType}\n'${e.year.toString().substring(2)}";
+                              return Expanded(
+                                child: Center(
+                                  child: Text(
+                                    shortLabel,
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      color: isHovered ? const Color(0xff2F3E46) : Colors.grey.shade500,
+                                      fontWeight: isHovered ? FontWeight.bold : FontWeight.normal,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),  // SizedBox
+                  ),  // Expanded
+                ],
               ),
             ),
           ],
@@ -615,27 +704,43 @@ class _BudgetVsDisbursedChart extends StatelessWidget {
       ),
     );
   }
+
+  Widget _tooltipRow(String label, double value, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 7, height: 7,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            '$label: ${_compact(value)}',
+            style: const TextStyle(color: Colors.white, fontSize: 9),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _Bar extends StatelessWidget {
-  final double ratio;
-  final Color color;
-  final double maxHeight;
+class _BarRect extends StatelessWidget {
+  final double height;
+  final Color  color;
+  final bool   hovered;
 
-  const _Bar({
-    required this.ratio,
-    required this.color,
-    required this.maxHeight,
-  });
+  const _BarRect({required this.height, required this.color, required this.hovered});
 
   @override
   Widget build(BuildContext context) {
-    final height = (ratio * maxHeight).clamp(2.0, maxHeight);
-    return Container(
-      width: 14,
-      height: height,
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
+      width:  hovered ? 13 : 11,
+      height: height.clamp(2.0, double.infinity),
       decoration: BoxDecoration(
-        color: color,
+        color: hovered ? color : color.withValues(alpha: 0.85),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
       ),
     );
@@ -653,7 +758,10 @@ class _Legend extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(width: 12, height: 12, color: color),
+        Container(
+          width: 10, height: 10,
+          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
+        ),
         const SizedBox(width: 4),
         Text(label, style: const TextStyle(fontSize: 11)),
       ],
@@ -668,7 +776,6 @@ class _FundTypeDistributionChart extends StatelessWidget {
 
   const _FundTypeDistributionChart({required this.entries});
 
-  // Consistent color palette for up to 13 fund types
   static const _palette = [
     Color(0xff2F3E46),
     Color(0xff3A7CA5),
@@ -687,13 +794,11 @@ class _FundTypeDistributionChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Aggregate total amount per fund type
     final totals = <String, double>{};
     for (final e in entries) {
       totals[e.fundType] = (totals[e.fundType] ?? 0) + e.amount;
     }
 
-    // Sort descending by amount
     final sorted = totals.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
@@ -758,10 +863,7 @@ class _FundTypeDistributionChart extends StatelessWidget {
                           Expanded(
                             child: Text(
                               fundEntry.key,
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                              ),
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -786,9 +888,7 @@ class _FundTypeDistributionChart extends StatelessWidget {
                                 value: barRatio,
                                 minHeight: 7,
                                 backgroundColor: Colors.grey.shade100,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  color,
-                                ),
+                                valueColor: AlwaysStoppedAnimation<Color>(color),
                               ),
                             ),
                           ),

@@ -7,6 +7,17 @@ class WFPEntry {
   final String fundType;
   final double amount;
 
+  /// Approval lifecycle: 'Pending' | 'Approved' | 'Rejected'
+  final String approvalStatus;
+
+  /// ISO-8601 date string (yyyy-MM-dd) set when approvalStatus → 'Approved'.
+  /// Null until approved.
+  final String? approvedDate;
+
+  /// ISO-8601 date string (yyyy-MM-dd) for this WFP's due/end date.
+  /// Used for deadline notifications.
+  final String? dueDate;
+
   const WFPEntry({
     required this.id,
     required this.title,
@@ -15,9 +26,22 @@ class WFPEntry {
     required this.year,
     required this.fundType,
     required this.amount,
+    this.approvalStatus = 'Pending',
+    this.approvedDate,
+    this.dueDate,
   });
 
-  /// Creates a copy of this entry with optional field overrides.
+  /// True only when this entry has been explicitly approved.
+  bool get isApproved => approvalStatus == 'Approved';
+
+  /// Days until due date from today. Null if no due date set.
+  int? get daysUntilDue {
+    if (dueDate == null) return null;
+    final due = DateTime.tryParse(dueDate!);
+    if (due == null) return null;
+    return due.difference(DateTime.now()).inDays;
+  }
+
   WFPEntry copyWith({
     String? id,
     String? title,
@@ -26,6 +50,11 @@ class WFPEntry {
     int? year,
     String? fundType,
     double? amount,
+    String? approvalStatus,
+    String? approvedDate,
+    String? dueDate,
+    bool clearApprovedDate = false,
+    bool clearDueDate = false,
   }) {
     return WFPEntry(
       id: id ?? this.id,
@@ -35,10 +64,12 @@ class WFPEntry {
       year: year ?? this.year,
       fundType: fundType ?? this.fundType,
       amount: amount ?? this.amount,
+      approvalStatus: approvalStatus ?? this.approvalStatus,
+      approvedDate: clearApprovedDate ? null : (approvedDate ?? this.approvedDate),
+      dueDate: clearDueDate ? null : (dueDate ?? this.dueDate),
     );
   }
 
-  /// Serializes to a map for SQLite insertion/update.
   Map<String, dynamic> toMap() => {
         'id': id,
         'title': title,
@@ -47,9 +78,11 @@ class WFPEntry {
         'year': year,
         'fundType': fundType,
         'amount': amount,
+        'approvalStatus': approvalStatus,
+        'approvedDate': approvedDate,
+        'dueDate': dueDate,
       };
 
-  /// Deserializes from a SQLite map row.
   factory WFPEntry.fromMap(Map<String, dynamic> map) => WFPEntry(
         id: map['id'] as String,
         title: map['title'] as String,
@@ -58,14 +91,16 @@ class WFPEntry {
         year: map['year'] as int,
         fundType: map['fundType'] as String,
         amount: (map['amount'] as num).toDouble(),
+        approvalStatus: (map['approvalStatus'] as String?) ?? 'Pending',
+        approvedDate: map['approvedDate'] as String?,
+        dueDate: map['dueDate'] as String?,
       );
 
   @override
-  String toString() => 'WFPEntry($id, $title, $fundType, $year)';
+  String toString() => 'WFPEntry($id, $title, $fundType, $year, $approvalStatus)';
 
   @override
-  bool operator ==(Object other) =>
-      other is WFPEntry && other.id == id;
+  bool operator ==(Object other) => other is WFPEntry && other.id == id;
 
   @override
   int get hashCode => id.hashCode;

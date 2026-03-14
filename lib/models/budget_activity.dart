@@ -7,6 +7,10 @@ class BudgetActivity {
   final double disbursed;
   final String status;
 
+  /// ISO-8601 date string (yyyy-MM-dd) for when this activity should be completed.
+  /// Used for deadline notifications.
+  final String? targetDate;
+
   const BudgetActivity({
     required this.id,
     required this.wfpId,
@@ -15,12 +19,20 @@ class BudgetActivity {
     required this.projected,
     required this.disbursed,
     required this.status,
+    this.targetDate,
   });
 
   /// Auto-calculated: Total Amount minus Disbursed Amount.
   double get balance => total - disbursed;
 
-  /// Creates a copy with optional field overrides.
+  /// Days until target date from today. Null if no target date set.
+  int? get daysUntilTarget {
+    if (targetDate == null) return null;
+    final target = DateTime.tryParse(targetDate!);
+    if (target == null) return null;
+    return target.difference(DateTime.now()).inDays;
+  }
+
   BudgetActivity copyWith({
     String? id,
     String? wfpId,
@@ -29,6 +41,8 @@ class BudgetActivity {
     double? projected,
     double? disbursed,
     String? status,
+    String? targetDate,
+    bool clearTargetDate = false,
   }) {
     return BudgetActivity(
       id: id ?? this.id,
@@ -38,10 +52,10 @@ class BudgetActivity {
       projected: projected ?? this.projected,
       disbursed: disbursed ?? this.disbursed,
       status: status ?? this.status,
+      targetDate: clearTargetDate ? null : (targetDate ?? this.targetDate),
     );
   }
 
-  /// Serializes to a map for SQLite insertion/update.
   Map<String, dynamic> toMap() => {
         'id': id,
         'wfpId': wfpId,
@@ -50,9 +64,9 @@ class BudgetActivity {
         'projected': projected,
         'disbursed': disbursed,
         'status': status,
+        'targetDate': targetDate,
       };
 
-  /// Deserializes from a SQLite map row.
   factory BudgetActivity.fromMap(Map<String, dynamic> map) => BudgetActivity(
         id: map['id'] as String,
         wfpId: map['wfpId'] as String,
@@ -61,11 +75,11 @@ class BudgetActivity {
         projected: (map['projected'] as num).toDouble(),
         disbursed: (map['disbursed'] as num).toDouble(),
         status: map['status'] as String,
+        targetDate: map['targetDate'] as String?,
       );
 
   @override
-  bool operator ==(Object other) =>
-      other is BudgetActivity && other.id == id;
+  bool operator ==(Object other) => other is BudgetActivity && other.id == id;
 
   @override
   int get hashCode => id.hashCode;
