@@ -53,10 +53,33 @@ class AppState extends ChangeNotifier {
       await _refreshDeadlines();
       _error = null;
     } catch (e) {
-      _error = 'Failed to load data: $e';
+      // Database unavailable — fall back to local SharedPreferences cache.
+      _error = 'Database unavailable, using local cache: $e';
+      try {
+        _wfpEntries = await _loadWFPsFromPrefs();
+      } catch (_) {
+        _wfpEntries = [];
+      }
     } finally {
       _setLoading(false);
     }
+  }
+
+  // ── Local cache helpers (fallback when DB is unavailable) ───────────────
+  static const String _prefsWFPKey = 'wfps_temp';
+
+  Future<void> _saveWFPsToPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = _wfpEntries.map((e) => e.toMap()).toList();
+    await prefs.setString(_prefsWFPKey, jsonEncode(list));
+  }
+
+  Future<List<WFPEntry>> _loadWFPsFromPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_prefsWFPKey);
+    if (raw == null || raw.isEmpty) return [];
+    final decoded = jsonDecode(raw) as List<dynamic>;
+    return decoded.map((m) => WFPEntry.fromMap(Map<String, dynamic>.from(m))).toList();
   }
 
   Future<void> setWarningDays(int days) async {
@@ -89,11 +112,18 @@ class AppState extends ChangeNotifier {
   }
 
   Future<String> generateWFPId(int year) async {
-    int count = await DatabaseHelper.countWFPsByYear(year);
-    String id;
-    do { count++; id = IDGenerator.generateWFP(year, count); }
-    while (await DatabaseHelper.wfpIdExists(id));
-    return id;
+    try {
+      int count = await DatabaseHelper.countWFPsByYear(year);
+      String id;
+      do { count++; id = IDGenerator.generateWFP(year, count); }
+      while (await DatabaseHelper.wfpIdExists(id));
+      return id;
+    } catch (_) {
+      // Fallback: use local list to generate id
+      final yearCount = _wfpEntries.where((w) => w.year == year).length;
+      final count = yearCount + 1;
+      return IDGenerator.generateWFP(year, count);
+    }
   }
 
   Future<void> addWFP(WFPEntry entry) async {
@@ -104,8 +134,16 @@ class AppState extends ChangeNotifier {
       _wfpEntries = await DatabaseHelper.getAllWFPs();
       await _refreshDeadlines();
       _error = null;
-    } catch (e) { _error = 'Failed to add WFP entry: $e'; }
-    finally { _setLoading(false); }
+    } catch (e) {
+      // Fallback to local cache
+      try {
+        _wfpEntries.add(entry);
+        await _saveWFPsToPrefs();
+        _error = null;
+      } catch (err) {
+        _error = 'Failed to add WFP entry: $e';
+      }
+    } finally { _setLoading(false); }
   }
 
   Future<void> updateWFP(WFPEntry entry) async {
@@ -118,8 +156,18 @@ class AppState extends ChangeNotifier {
       if (_selectedWFP?.id == entry.id) _selectedWFP = entry;
       await _refreshDeadlines();
       _error = null;
-    } catch (e) { _error = 'Failed to update WFP entry: $e'; }
-    finally { _setLoading(false); }
+    } catch (e) {
+      // Fallback: update in local cache
+      try {
+        final idx = _wfpEntries.indexWhere((w) => w.id == entry.id);
+        if (idx != -1) _wfpEntries[idx] = entry;
+        await _saveWFPsToPrefs();
+        if (_selectedWFP?.id == entry.id) _selectedWFP = entry;
+        _error = null;
+      } catch (err) {
+        _error = 'Failed to update WFP entry: $e';
+      }
+    } finally { _setLoading(false); }
   }
 
   Future<void> deleteWFP(String id) async {
@@ -134,8 +182,17 @@ class AppState extends ChangeNotifier {
       await _refreshDeadlines();
       if (_selectedWFP?.id == id) { _selectedWFP = null; _activities = []; }
       _error = null;
-    } catch (e) { _error = 'Failed to delete WFP entry: $e'; }
-    finally { _setLoading(false); }
+    } catch (e) {
+      // Fallback: remove from local cache
+      try {
+        _wfpEntries.removeWhere((w) => w.id == id);
+        await _saveWFPsToPrefs();
+        if (_selectedWFP?.id == id) { _selectedWFP = null; _activities = []; }
+        _error = null;
+      } catch (err) {
+        _error = 'Failed to delete WFP entry: $e';
+      }
+    } finally { _setLoading(false); }
   }
 
   Future<int> getActivityCountForWFP(String wfpId) =>
