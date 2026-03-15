@@ -47,7 +47,7 @@ class WFPManagementPageState extends State<WFPManagementPage> {
   static const _approvalOptions = ['Pending', 'Approved', 'Rejected'];
 
   // Zoom & scrolling
-  double _zoom = 1.0;
+  double _zoom = 0.85;
   final ScrollController _hScrollController = ScrollController();
   static const double _minZoom = 0.6;
   static const double _maxZoom = 1.6;
@@ -56,6 +56,11 @@ class WFPManagementPageState extends State<WFPManagementPage> {
   void _clampHorizontalScroll() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_hScrollController.hasClients) return;
+      // When zoom <= 0.85 we disable horizontal scrolling — reset to start.
+      if (_zoom <= 0.85) {
+        _hScrollController.jumpTo(0.0);
+        return;
+      }
       final max = _hScrollController.position.maxScrollExtent;
       final pos = _hScrollController.offset;
       if (pos > max) _hScrollController.jumpTo(max.clamp(0.0, double.infinity));
@@ -625,10 +630,10 @@ class WFPManagementPageState extends State<WFPManagementPage> {
                   // for measuring columns/rows (so columns/rows don't drop).
                   return Scrollbar(
                     controller: _hScrollController,
-                    thumbVisibility: _zoom > 0.8,
-                    trackVisibility: _zoom > 0.8,
+                    thumbVisibility: _zoom > 0.85,
+                    trackVisibility: _zoom > 0.85,
                     child: SingleChildScrollView(
-                      physics: _zoom <= 0.8 ? const NeverScrollableScrollPhysics() : const ClampingScrollPhysics(),
+                      physics: _zoom <= 0.85 ? const NeverScrollableScrollPhysics() : const ClampingScrollPhysics(),
                       controller: _hScrollController,
                       scrollDirection: Axis.horizontal,
                       child: SizedBox(
