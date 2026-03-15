@@ -217,7 +217,7 @@ class _ReportsPageState extends State<ReportsPage> {
     final byMonth = <String, List<WFPEntry>>{}; // key: "YYYY-MM"
 
     // Month derived from approvedDate, then dueDate, then year-only fallback
-    String _monthKey(WFPEntry e) {
+    String monthKey(WFPEntry e) {
       final date = e.approvedDate ?? e.dueDate;
       if (date != null && date.length >= 7) return date.substring(0, 7); // "YYYY-MM"
       return '${e.year}-??';
@@ -226,15 +226,15 @@ class _ReportsPageState extends State<ReportsPage> {
     for (final e in entries) {
       byYear.putIfAbsent(e.year, () => []).add(e);
       byFund.putIfAbsent(e.fundType, () => []).add(e);
-      byMonth.putIfAbsent(_monthKey(e), () => []).add(e);
+      byMonth.putIfAbsent(monthKey(e), () => []).add(e);
     }
     final years     = byYear.keys.toList()..sort((a, b) => b.compareTo(a));
     final fundTypes = byFund.keys.toList()..sort();
     final months    = byMonth.keys.toList()..sort((a, b) => b.compareTo(a));
 
     const monthNames = ['', 'Jan','Feb','Mar','Apr','May','Jun',
-        'Jul','Aug','Sep','Oct','Nov','Dec'];
-    String _monthLabel(String key) {
+      'Jul','Aug','Sep','Oct','Nov','Dec'];
+    String monthLabel(String key) {
       if (key.endsWith('??')) return '${key.substring(0, 4)} (no date)';
       final parts = key.split('-');
       if (parts.length < 2) return key;
@@ -343,7 +343,7 @@ class _ReportsPageState extends State<ReportsPage> {
                     ctx: ctx,
                     icon: Icons.event_outlined,
                     color: const Color(0xff9B5DE5),
-                    label: _monthLabel(month),
+                    label: monthLabel(month),
                     subtitle: '${group.length} entr${group.length == 1 ? 'y' : 'ies'} — '
                         '${group.map((e) => e.fundType).toSet().join(', ')}',
                     onTap: () {
@@ -409,9 +409,10 @@ class _ReportsPageState extends State<ReportsPage> {
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(children: [
-          Container(
+              Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
+              // color: color.withValues(alpha: 0.1),
               color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(6),
             ),
@@ -611,7 +612,7 @@ class _ReportsPageState extends State<ReportsPage> {
                       Row(children: [
                         Expanded(
                           child: DropdownButtonFormField<String>(
-                            value: _filterFundType,
+                            initialValue: _filterFundType,
                             decoration: const InputDecoration(labelText: 'Fund Type', isDense: true),
                             items: [
                               const DropdownMenuItem(value: null,
@@ -625,7 +626,7 @@ class _ReportsPageState extends State<ReportsPage> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: DropdownButtonFormField<String>(
-                            value: _filterApproval,
+                            initialValue: _filterApproval,
                             decoration: const InputDecoration(labelText: 'Approval', isDense: true),
                             items: const [
                               DropdownMenuItem(value: null,
@@ -805,10 +806,11 @@ class _ReportsPageState extends State<ReportsPage> {
 
     return InkWell(
       onTap: () => _selectWFP(e),
-      child: Container(
-        color: isSelected
-            ? const Color(0xff2F3E46).withValues(alpha: 0.07)
-            : null,
+        child: Container(
+          // color: isSelected
+          //   ? const Color(0xff2F3E46).withValues(alpha: 0.07)
+          //   : null,
+          color: isSelected ? const Color(0xff2F3E46).withValues(alpha: 0.07) : null,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(children: [
           if (isSelected)
@@ -835,7 +837,8 @@ class _ReportsPageState extends State<ReportsPage> {
                 const SizedBox(width: 6),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                  decoration: BoxDecoration(
+                    decoration: BoxDecoration(
+                    // color: const Color(0xff2F3E46).withValues(alpha: 0.08),
                     color: const Color(0xff2F3E46).withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(3)),
                   child: Text(e.fundType,
@@ -866,6 +869,7 @@ class _ReportsPageState extends State<ReportsPage> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
               decoration: BoxDecoration(
+                // color: approvalColor.withValues(alpha: 0.1),
                 color: approvalColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(3)),
               child: Text(e.approvalStatus,

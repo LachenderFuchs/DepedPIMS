@@ -171,6 +171,7 @@ class DeadlinesPage extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
+                // color: color.withValues(alpha: 0.1),
                 color: color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
@@ -298,6 +299,7 @@ class DeadlinesPage extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
+                  // color: urgencyColor.withValues(alpha: 0.12),
                   color: urgencyColor.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(6),
                 ),
@@ -330,6 +332,7 @@ class DeadlinesPage extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
+        // color: color.withValues(alpha: 0.1),
         color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(4),
       ),

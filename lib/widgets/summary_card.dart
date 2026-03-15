@@ -4,7 +4,7 @@ class SummaryCard extends StatelessWidget {
   final String title;
   final String value;
 
-  const SummaryCard({required this.title, required this.value});
+  const SummaryCard({super.key, required this.title, required this.value});
 
   @override
   Widget build(BuildContext context) {

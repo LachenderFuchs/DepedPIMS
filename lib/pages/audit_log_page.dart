@@ -226,6 +226,7 @@ class _AuditLogPageState extends State<AuditLogPage> {
       leading: Container(
         width: 36, height: 36,
         decoration: BoxDecoration(
+          // color: actionColor.withValues(alpha: 0.1),
           color: actionColor.withValues(alpha: 0.1),
           shape: BoxShape.circle,
         ),
@@ -234,7 +235,8 @@ class _AuditLogPageState extends State<AuditLogPage> {
       title: Row(children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-          decoration: BoxDecoration(
+            decoration: BoxDecoration(
+            // color: typeColor.withValues(alpha: 0.1),
             color: typeColor.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(4),
           ),
@@ -245,6 +247,7 @@ class _AuditLogPageState extends State<AuditLogPage> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
           decoration: BoxDecoration(
+            // color: actionColor.withValues(alpha: 0.1),
             color: actionColor.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(4),
           ),

@@ -31,6 +31,7 @@ class Sidebar extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 'DepED Management System',
+                // style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 10),
                 style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 10),
                 textAlign: TextAlign.center,
               ),
@@ -68,7 +69,8 @@ class Sidebar extends StatelessWidget {
   Widget _tile(IconData icon, String label, int index, bool active, int? badge) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-      decoration: BoxDecoration(
+        decoration: BoxDecoration(
+        // color: active ? Colors.white.withValues(alpha: 0.15) : Colors.transparent,
         color: active ? Colors.white.withValues(alpha: 0.15) : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
       ),

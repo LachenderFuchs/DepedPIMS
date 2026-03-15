@@ -46,6 +46,23 @@ class WFPManagementPageState extends State<WFPManagementPage> {
   static const _sections        = ['Section A', 'Section B', 'Section C'];
   static const _approvalOptions = ['Pending', 'Approved', 'Rejected'];
 
+  // Zoom & scrolling
+  double _zoom = 1.0;
+  final ScrollController _hScrollController = ScrollController();
+  static const double _minZoom = 0.6;
+  static const double _maxZoom = 1.6;
+  static const double _zoomStep = 0.1;
+
+  void _clampHorizontalScroll() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_hScrollController.hasClients) return;
+      final max = _hScrollController.position.maxScrollExtent;
+      final pos = _hScrollController.offset;
+      if (pos > max) _hScrollController.jumpTo(max.clamp(0.0, double.infinity));
+      if (pos < 0)  _hScrollController.jumpTo(0.0);
+    });
+  }
+
   // ─── Filtering & Sorting ──────────────────────────────────────────────────
 
   List<WFPEntry> get _filtered {
@@ -130,6 +147,17 @@ class WFPManagementPageState extends State<WFPManagementPage> {
       _dueDate        = null;
       _editingEntry   = null;
     });
+  }
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _targetSize.dispose();
+    _indicator.dispose();
+    _amount.dispose();
+    _search.dispose();
+    _hScrollController.dispose();
+    super.dispose();
   }
 
   // ─── Date Pickers ─────────────────────────────────────────────────────────
@@ -551,30 +579,77 @@ class WFPManagementPageState extends State<WFPManagementPage> {
 
                 const SizedBox(height: 16),
 
+                // ── Table toolbar (zoom controls) ─────────────────────
+                Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                  const Text('Zoom', style: TextStyle(color: Colors.grey)),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: 'Zoom out',
+                    icon: const Icon(Icons.remove_circle_outline),
+                    onPressed: _zoom > _minZoom ? () {
+                      setState(() => _zoom = (_zoom - _zoomStep).clamp(_minZoom, _maxZoom));
+                      _clampHorizontalScroll();
+                    } : null,
+                  ),
+                  Text('${(_zoom * 100).round()}%'),
+                  IconButton(
+                    tooltip: 'Reset zoom',
+                    icon: const Icon(Icons.refresh),
+                    onPressed: () {
+                      setState(() => _zoom = 1.0);
+                      _clampHorizontalScroll();
+                    },
+                  ),
+                  IconButton(
+                    tooltip: 'Zoom in',
+                    icon: const Icon(Icons.add_circle_outline),
+                    onPressed: _zoom < _maxZoom ? () {
+                      setState(() => _zoom = (_zoom + _zoomStep).clamp(_minZoom, _maxZoom));
+                      _clampHorizontalScroll();
+                    } : null,
+                  ),
+                ]),
+
                 // ── Data Table ─────────────────────────────────────────
                 // LayoutBuilder measures available width. If narrower than
                 // _tableMinWidth the horizontal ScrollView enables drag.
-                // The SizedBox locks to exactly _tableMinWidth so DataTable2
-                // always has enough room for all 9 columns.
+                // We apply a zoom by scaling the inner table and expanding
+                // the horizontal scroll width to match the scaled size.
                 LayoutBuilder(builder: (context, constraints) {
-                  final tableWidth = constraints.maxWidth < _tableMinWidth
+                  final baseWidth = constraints.maxWidth < _tableMinWidth
                       ? _tableMinWidth
                       : constraints.maxWidth;
-                  return SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: SizedBox(
-                      width: tableWidth,
-                      height: _tableHeight,
-                      child: DataTable2(
-                        minWidth: _tableMinWidth,
-                        sortColumnIndex: _sortColumnIndex,
-                        sortAscending: _sortAscending,
-                        headingRowColor: WidgetStateProperty.all(const Color(0xff2F3E46)),
-                        headingTextStyle: const TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.bold),
-                        columnSpacing: 16,
-                        horizontalMargin: 12,
-                        columns: [
+                  // Keep the scrollable layout size = baseWidth/baseHeight
+                  // and only scale the painted content. This ensures zooming
+                  // changes visual size without shrinking the layout used
+                  // for measuring columns/rows (so columns/rows don't drop).
+                  return Scrollbar(
+                    controller: _hScrollController,
+                    thumbVisibility: _zoom > 0.8,
+                    trackVisibility: _zoom > 0.8,
+                    child: SingleChildScrollView(
+                      physics: _zoom <= 0.8 ? const NeverScrollableScrollPhysics() : const ClampingScrollPhysics(),
+                      controller: _hScrollController,
+                      scrollDirection: Axis.horizontal,
+                      child: SizedBox(
+                        width: baseWidth,
+                        height: _tableHeight,
+                        child: Transform.scale(
+                          scale: _zoom,
+                          alignment: Alignment.topLeft,
+                          child: SizedBox(
+                            width: baseWidth,
+                            height: _tableHeight,
+                            child: DataTable2(
+                              minWidth: _tableMinWidth,
+                              sortColumnIndex: _sortColumnIndex,
+                              sortAscending: _sortAscending,
+                              headingRowColor: WidgetStateProperty.all(const Color(0xff2F3E46)),
+                              headingTextStyle: const TextStyle(
+                                  color: Colors.white, fontWeight: FontWeight.bold),
+                              columnSpacing: 16,
+                              horizontalMargin: 12,
+                              columns: [
                           DataColumn2(label: const Text('WFP ID'),
                               size: ColumnSize.M, onSort: _onSort),
                           DataColumn2(label: const Text('Title'),
@@ -677,10 +752,13 @@ class WFPManagementPageState extends State<WFPManagementPage> {
                             ],
                           );
                         }).toList(),
-                      ),
-                    ),
-                  );
-                }),
+                      ), // DataTable2
+                    ), // inner SizedBox
+                  ), // Transform.scale
+                ), // outer SizedBox
+              ), // SingleChildScrollView
+            ); // Scrollbar
+          }),
 
                 // ── Pagination ─────────────────────────────────────────
                 _PaginationBar(

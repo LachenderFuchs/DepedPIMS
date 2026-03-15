@@ -171,32 +171,32 @@ class ReportExporter {
     setCell(6, 0, 'Total AR Amount:', headerLabelStyle);
     setCell(6, 2, realTotalAR, totalCurrencyStyle);
     if (activities.isNotEmpty) {
-      setFormula(6, 2,
-          'SUM(${totalArCol}${dataStartRow}:${totalArCol}${dataEndRow})',
+        setFormula(6, 2,
+          'SUM($totalArCol$dataStartRow:$totalArCol$dataEndRow)',
           totalCurrencyStyle);
     }
 
     setCell(7, 0, 'Total AR Amount (Projected / Obligated):', headerLabelStyle);
     setCell(7, 2, realTotalProjected, totalCurrencyStyle);
     if (activities.isNotEmpty) {
-      setFormula(7, 2,
-          'SUM(${projectedCol}${dataStartRow}:${projectedCol}${dataEndRow})',
+        setFormula(7, 2,
+          'SUM($projectedCol$dataStartRow:$projectedCol$dataEndRow)',
           totalCurrencyStyle);
     }
 
     setCell(8, 0, 'Total AR Disbursed:', headerLabelStyle);
     setCell(8, 2, realTotalDisbursed, totalCurrencyStyle);
     if (activities.isNotEmpty) {
-      setFormula(8, 2,
-          'SUM(${disbursedCol}${dataStartRow}:${disbursedCol}${dataEndRow})',
+        setFormula(8, 2,
+          'SUM($disbursedCol$dataStartRow:$disbursedCol$dataEndRow)',
           totalCurrencyStyle);
     }
 
     setCell(9, 0, 'Total AR Balance:', headerLabelStyle);
     setCell(9, 2, realTotalBalance, totalCurrencyStyle);
     if (activities.isNotEmpty) {
-      setFormula(9, 2,
-          'SUM(${balanceCol}${dataStartRow}:${balanceCol}${dataEndRow})',
+        setFormula(9, 2,
+          'SUM($balanceCol$dataStartRow:$balanceCol$dataEndRow)',
           totalCurrencyStyle);
     }
 
@@ -235,7 +235,7 @@ class ReportExporter {
       setCell(row, 4, a.disbursed, currencyStyle);
       // Balance = Total - Disbursed as formula
       final excelRow = row + 1; // 1-indexed
-      setFormula(row, 5, '${totalArCol}${excelRow}-${disbursedCol}${excelRow}',
+        setFormula(row, 5, '$totalArCol$excelRow-$disbursedCol$excelRow',
           currencyStyle);
       setCell(row, 6, a.status, dataStyle);
     }
@@ -252,16 +252,16 @@ class ReportExporter {
       setCell(totalsRow, 5, realTotalBalance,   totalCurrencyStyle);
       // Then overwrite with SUM formulas so editing individual cells auto-updates
       setFormula(totalsRow, 2,
-          'SUM(${totalArCol}${dataStartRow}:${totalArCol}${dataEndRow})',
+          'SUM($totalArCol$dataStartRow:$totalArCol$dataEndRow)',
           totalCurrencyStyle);
       setFormula(totalsRow, 3,
-          'SUM(${projectedCol}${dataStartRow}:${projectedCol}${dataEndRow})',
+          'SUM($projectedCol$dataStartRow:$projectedCol$dataEndRow)',
           totalCurrencyStyle);
       setFormula(totalsRow, 4,
-          'SUM(${disbursedCol}${dataStartRow}:${disbursedCol}${dataEndRow})',
+          'SUM($disbursedCol$dataStartRow:$disbursedCol$dataEndRow)',
           totalCurrencyStyle);
       setFormula(totalsRow, 5,
-          'SUM(${balanceCol}${dataStartRow}:${balanceCol}${dataEndRow})',
+          'SUM($balanceCol$dataStartRow:$balanceCol$dataEndRow)',
           totalCurrencyStyle);
       setCell(totalsRow, 6, '', totalLabelStyle);
     }
@@ -340,9 +340,13 @@ class ReportExporter {
 
     void setCell(int row, int col, dynamic value, CellStyle style) {
       final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: row));
-      if (value is double)      cell.value = DoubleCellValue(value);
-      else if (value is int)    cell.value = IntCellValue(value);
-      else                      cell.value = TextCellValue(value?.toString() ?? '');
+      if (value is double) {
+        cell.value = DoubleCellValue(value);
+      } else if (value is int) {
+        cell.value = IntCellValue(value);
+      } else {
+        cell.value = TextCellValue(value?.toString() ?? '');
+      }
       cell.cellStyle = style;
     }
 

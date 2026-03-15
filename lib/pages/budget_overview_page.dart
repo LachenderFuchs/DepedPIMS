@@ -367,6 +367,7 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                               decoration: BoxDecoration(
+                                // color: const Color(0xff2F3E46).withValues(alpha: 0.08),
                                 color: const Color(0xff2F3E46).withValues(alpha: 0.08),
                                 borderRadius: BorderRadius.circular(10),
                               ),
@@ -442,6 +443,7 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                                       final daysUntil   = e.daysUntilDue;
                                       return DataRow2(
                                         color: WidgetStateProperty.resolveWith((_) {
+                                          // if (isSelected) return const Color(0xff2F3E46).withValues(alpha: 0.08);
                                           if (isSelected) return const Color(0xff2F3E46).withValues(alpha: 0.08);
                                           return i.isEven ? Colors.white : Colors.grey.shade50;
                                         }),
@@ -466,18 +468,20 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                                           ])),
                                           DataCell(Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xff2F3E46).withValues(alpha: 0.1),
-                                              borderRadius: BorderRadius.circular(5)),
+                                              decoration: BoxDecoration(
+                                                // color: const Color(0xff2F3E46).withValues(alpha: 0.1),
+                                                color: const Color(0xff2F3E46).withValues(alpha: 0.1),
+                                                borderRadius: BorderRadius.circular(3)),
                                             child: Text(e.fundType, style: const TextStyle(fontSize: 11)))),
                                           DataCell(Text(e.year.toString())),
                                           DataCell(Text(CurrencyFormatter.format(e.amount),
                                             style: const TextStyle(fontWeight: FontWeight.w500))),
                                           DataCell(Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: approvalClr.withValues(alpha: 0.1),
-                                              borderRadius: BorderRadius.circular(5)),
+                                              decoration: BoxDecoration(
+                                                // color: approvalClr.withValues(alpha: 0.1),
+                                                color: approvalClr.withValues(alpha: 0.1),
+                                                borderRadius: BorderRadius.circular(3)),
                                             child: Text(e.approvalStatus, style: TextStyle(
                                               fontSize: 11, color: approvalClr, fontWeight: FontWeight.w600)))),
                                           DataCell(e.dueDate == null
@@ -492,15 +496,18 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                                                     color: daysUntil != null && daysUntil < 0
                                                         ? Colors.red.shade600 : Colors.black87)),
                                                 ])),
-                                          DataCell(isSelected
+                                          DataCell(
+                                            isSelected
                                               ? Container(
                                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                                   decoration: BoxDecoration(
+                                                    // color: const Color(0xff2F3E46).withValues(alpha: 0.08),
                                                     color: const Color(0xff2F3E46).withValues(alpha: 0.08),
-                                                    borderRadius: BorderRadius.circular(6)),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
                                                   child: const Text('Selected', style: TextStyle(
-                                                    fontSize: 11, color: Color(0xff2F3E46),
-                                                    fontWeight: FontWeight.w600)))
+                                                    fontSize: 11, color: Color(0xff2F3E46), fontWeight: FontWeight.w600)),
+                                                )
                                               : TextButton.icon(
                                                   style: TextButton.styleFrom(
                                                     backgroundColor: const Color(0xff2F3E46),
@@ -513,7 +520,8 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                                                   icon: const Icon(Icons.add, size: 13),
                                                   label: const Text('Add Activity'),
                                                   onPressed: () => _selectWFP(e),
-                                                )),
+                                                ),
+                                          ),
                                         ],
                                       );
                                     }).toList(),
@@ -533,8 +541,10 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
+                      // color: const Color(0xff2F3E46).withValues(alpha: 0.05),
                       color: const Color(0xff2F3E46).withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(12),
+                      // border: Border.all(color: const Color(0xff2F3E46).withValues(alpha: 0.2)),
                       border: Border.all(color: const Color(0xff2F3E46).withValues(alpha: 0.2)),
                     ),
                     child: Wrap(spacing: 12, runSpacing: 8, children: [
@@ -775,6 +785,7 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                             DataCell(Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
+                                // color: _statusColor(a.status).withValues(alpha: 0.12),
                                 color: _statusColor(a.status).withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(6)),
                               child: Text(a.status, style: TextStyle(
@@ -912,9 +923,11 @@ class _PaginationBar extends StatelessWidget {
             .fold<List<Widget>>([], (acc, i) {
               if (acc.isNotEmpty) {
                 final prev = int.tryParse((acc.last as dynamic)?.key?.toString() ?? '') ?? -999;
-                if (i - prev > 1) acc.add(Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Text('…', style: TextStyle(color: Colors.grey.shade500))));
+                if (i - prev > 1) {
+                  acc.add(Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text('…', style: TextStyle(color: Colors.grey.shade500))));
+                }
               }
               final isActive = i == currentPage;
               acc.add(Padding(

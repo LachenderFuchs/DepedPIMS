@@ -523,6 +523,7 @@ class _MiniListCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: _border),
         boxShadow: [BoxShadow(
+          // color: Colors.black.withValues(alpha: 0.04),
           color: Colors.black.withValues(alpha: 0.04),
           blurRadius: 8, offset: const Offset(0, 2))],
       ),
@@ -531,7 +532,7 @@ class _MiniListCard extends StatelessWidget {
         child: ListView.separated(
           padding: EdgeInsets.zero,
           itemCount: children.length,
-          separatorBuilder: (_, __) =>
+            separatorBuilder: (context, index) =>
               Divider(height: 1, color: _border),
           itemBuilder: (_, i) => children[i],
         ),
@@ -605,7 +606,8 @@ class _BudgetVsDisbursedChartState extends State<_BudgetVsDisbursedChart> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: _border),
         boxShadow: [BoxShadow(
-          color: Colors.black.withValues(alpha: 0.04),
+                          // color: Colors.black.withValues(alpha: 0.04),
+                          color: Colors.black.withValues(alpha: 0.04),
           blurRadius: 10, offset: const Offset(0, 2))],
       ),
       child: Padding(
@@ -708,7 +710,8 @@ class _BudgetVsDisbursedChartState extends State<_BudgetVsDisbursedChart> {
                                                 color: _ink,
                                                 borderRadius: BorderRadius.circular(10),
                                                 boxShadow: [BoxShadow(
-                                                  color: Colors.black.withValues(alpha: 0.2),
+                                                  // color: Colors.black.withValues(alpha: 0.2),
+                              color: Colors.black.withValues(alpha: 0.2),
                                                   blurRadius: 12, offset: const Offset(0, 4))],
                                               ),
                                               child: Column(
@@ -716,6 +719,7 @@ class _BudgetVsDisbursedChartState extends State<_BudgetVsDisbursedChart> {
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
                                                   Text(e.id, style: TextStyle(
+                                                    // color: Colors.white.withValues(alpha: 0.5),
                                                     color: Colors.white.withValues(alpha: 0.5),
                                                     fontSize: 8, fontFamily: 'monospace')),
                                                   Text(e.title, style: const TextStyle(
@@ -807,6 +811,7 @@ class _Bar extends StatelessWidget {
       width: hovered ? 14 : 11,
       height: height.clamp(2.0, double.infinity),
       decoration: BoxDecoration(
+        // color: hovered ? color : color.withValues(alpha: 0.78),
         color: hovered ? color : color.withValues(alpha: 0.78),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
       ),
@@ -831,22 +836,7 @@ class _LegendDot extends StatelessWidget {
   }
 }
 
-class _Legend extends StatelessWidget {
-  final Color color;
-  final String label;
 
-  const _Legend({required this.color, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      Container(width: 10, height: 10,
-        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
-      const SizedBox(width: 4),
-      Text(label, style: const TextStyle(fontSize: 11)),
-    ]);
-  }
-}
 
 // ─── Fund Type Distribution Chart ────────────────────────────────────────────
 
@@ -880,6 +870,7 @@ class _FundTypeDistributionChart extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: _border),
         boxShadow: [BoxShadow(
+          // color: Colors.black.withValues(alpha: 0.04),
           color: Colors.black.withValues(alpha: 0.04),
           blurRadius: 10, offset: const Offset(0, 2))],
       ),
@@ -989,6 +980,7 @@ class _PanelCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: _border),
             boxShadow: [BoxShadow(
+              // color: Colors.black.withValues(alpha: 0.04),
               color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 8, offset: const Offset(0, 2))],
           ),
@@ -997,6 +989,7 @@ class _PanelCard extends StatelessWidget {
             Container(
               width: 48, height: 48,
               decoration: BoxDecoration(
+                // color: color.withValues(alpha: 0.1),
                 color: color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -1013,6 +1006,7 @@ class _PanelCard extends StatelessWidget {
                   color: _muted, fontSize: 12)),
               ],
             )),
+            // Icon(Icons.arrow_forward_ios_rounded, size: 13, color: _muted.withValues(alpha: 0.7)),
             Icon(Icons.arrow_forward_ios_rounded, size: 13, color: _muted.withValues(alpha: 0.7)),
           ]),
         ),
