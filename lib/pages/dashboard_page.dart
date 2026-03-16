@@ -181,6 +181,8 @@ class _DashboardHome extends StatefulWidget {
 
 class _DashboardHomeState extends State<_DashboardHome> {
   int? _selectedFiscalYearStart;
+  // false = Activity Total (AR − disbursed), true = Totality (WFP budget − disbursed)
+  bool _balanceTotality = false;
 
   bool _inFiscalYear(WFPEntry e, int startYear) =>
       e.year == startYear || e.year == startYear + 1;
@@ -216,9 +218,11 @@ class _DashboardHomeState extends State<_DashboardHome> {
                 return wfp != null && _inFiscalYear(wfp, _selectedFiscalYearStart!);
               }).toList();
 
-        final totalBudget    = entries.fold<double>(0, (s, e) => s + e.amount);
-        final totalDisbursed = filteredActivities.fold<double>(0, (s, a) => s + a.disbursed);
-        final totalBalance   = filteredActivities.fold<double>(0, (s, a) => s + a.balance);
+        final totalBudget       = entries.fold<double>(0, (s, e) => s + e.amount);
+        final totalDisbursed    = filteredActivities.fold<double>(0, (s, a) => s + a.disbursed);
+        final activityBalance   = filteredActivities.fold<double>(0, (s, a) => s + a.balance);
+        final totalityBalance   = totalBudget - totalDisbursed;
+        final totalBalance      = _balanceTotality ? totalityBalance : activityBalance;
 
         return LayoutBuilder(builder: (context, constraints) {
           final wide    = constraints.maxWidth > 700;
@@ -239,7 +243,14 @@ class _DashboardHomeState extends State<_DashboardHome> {
                   Row(children: [
                     Expanded(child: SummaryCard(title: 'Total Disbursed', value: CurrencyFormatter.format(totalDisbursed))),
                     SizedBox(width: cardGap),
-                    Expanded(child: SummaryCard(title: 'Total Balance', value: CurrencyFormatter.format(totalBalance))),
+                    Expanded(
+                      child: _BalanceCard(
+                        activityBalance: activityBalance,
+                        totalityBalance: totalityBalance,
+                        isTotality: _balanceTotality,
+                        onToggle: (v) => setState(() => _balanceTotality = v),
+                      ),
+                    ),
                     SizedBox(width: cardGap),
                     const Expanded(child: SizedBox()),
                     SizedBox(width: cardGap),
@@ -259,8 +270,15 @@ class _DashboardHomeState extends State<_DashboardHome> {
                       child: SummaryCard(title: 'Total Activities', value: appState.totalActivityCount.toString())),
                     SizedBox(width: (constraints.maxWidth - cardGap) / 2 - 1,
                       child: SummaryCard(title: 'Total Disbursed', value: CurrencyFormatter.format(totalDisbursed))),
-                    SizedBox(width: (constraints.maxWidth - cardGap) / 2 - 1,
-                      child: SummaryCard(title: 'Total Balance', value: CurrencyFormatter.format(totalBalance))),
+                    SizedBox(
+                      width: (constraints.maxWidth - cardGap) / 2 - 1,
+                      child: _BalanceCard(
+                        activityBalance: activityBalance,
+                        totalityBalance: totalityBalance,
+                        isTotality: _balanceTotality,
+                        onToggle: (v) => setState(() => _balanceTotality = v),
+                      ),
+                    ),
                   ],
                 );
 
@@ -329,6 +347,13 @@ class _DashboardHomeState extends State<_DashboardHome> {
                   fySelector,
                 ]),
                 const SizedBox(height: 28),
+                if (appState.deadlineWarningCount > 0) ...[
+                  _DeadlineBanner(
+                    appState: appState,
+                    onNavigate: onNavigate,
+                  ),
+                  const SizedBox(height: 20),
+                ],
                 statCards,
                 const SizedBox(height: 28),
                 chartsRow,
@@ -523,7 +548,6 @@ class _MiniListCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: _border),
         boxShadow: [BoxShadow(
-          // color: Colors.black.withValues(alpha: 0.04),
           color: Colors.black.withValues(alpha: 0.04),
           blurRadius: 8, offset: const Offset(0, 2))],
       ),
@@ -532,7 +556,7 @@ class _MiniListCard extends StatelessWidget {
         child: ListView.separated(
           padding: EdgeInsets.zero,
           itemCount: children.length,
-            separatorBuilder: (context, index) =>
+          separatorBuilder: (_, __) =>
               Divider(height: 1, color: _border),
           itemBuilder: (_, i) => children[i],
         ),
@@ -606,8 +630,7 @@ class _BudgetVsDisbursedChartState extends State<_BudgetVsDisbursedChart> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: _border),
         boxShadow: [BoxShadow(
-                          // color: Colors.black.withValues(alpha: 0.04),
-                          color: Colors.black.withValues(alpha: 0.04),
+          color: Colors.black.withValues(alpha: 0.04),
           blurRadius: 10, offset: const Offset(0, 2))],
       ),
       child: Padding(
@@ -710,8 +733,7 @@ class _BudgetVsDisbursedChartState extends State<_BudgetVsDisbursedChart> {
                                                 color: _ink,
                                                 borderRadius: BorderRadius.circular(10),
                                                 boxShadow: [BoxShadow(
-                                                  // color: Colors.black.withValues(alpha: 0.2),
-                              color: Colors.black.withValues(alpha: 0.2),
+                                                  color: Colors.black.withValues(alpha: 0.2),
                                                   blurRadius: 12, offset: const Offset(0, 4))],
                                               ),
                                               child: Column(
@@ -719,7 +741,6 @@ class _BudgetVsDisbursedChartState extends State<_BudgetVsDisbursedChart> {
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
                                                   Text(e.id, style: TextStyle(
-                                                    // color: Colors.white.withValues(alpha: 0.5),
                                                     color: Colors.white.withValues(alpha: 0.5),
                                                     fontSize: 8, fontFamily: 'monospace')),
                                                   Text(e.title, style: const TextStyle(
@@ -811,7 +832,6 @@ class _Bar extends StatelessWidget {
       width: hovered ? 14 : 11,
       height: height.clamp(2.0, double.infinity),
       decoration: BoxDecoration(
-        // color: hovered ? color : color.withValues(alpha: 0.78),
         color: hovered ? color : color.withValues(alpha: 0.78),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
       ),
@@ -836,7 +856,22 @@ class _LegendDot extends StatelessWidget {
   }
 }
 
+class _Legend extends StatelessWidget {
+  final Color color;
+  final String label;
 
+  const _Legend({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Container(width: 10, height: 10,
+        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
+      const SizedBox(width: 4),
+      Text(label, style: const TextStyle(fontSize: 11)),
+    ]);
+  }
+}
 
 // ─── Fund Type Distribution Chart ────────────────────────────────────────────
 
@@ -870,7 +905,6 @@ class _FundTypeDistributionChart extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: _border),
         boxShadow: [BoxShadow(
-          // color: Colors.black.withValues(alpha: 0.04),
           color: Colors.black.withValues(alpha: 0.04),
           blurRadius: 10, offset: const Offset(0, 2))],
       ),
@@ -949,6 +983,405 @@ class _FundTypeDistributionChart extends StatelessWidget {
   }
 }
 
+// ─── Balance Card with mode toggle ───────────────────────────────────────────
+
+class _BalanceCard extends StatelessWidget {
+  final double activityBalance;
+  final double totalityBalance;
+  final bool isTotality;
+  final ValueChanged<bool> onToggle;
+
+  const _BalanceCard({
+    required this.activityBalance,
+    required this.totalityBalance,
+    required this.isTotality,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final value   = isTotality ? totalityBalance : activityBalance;
+    final isNeg   = value < 0;
+    final valColor = isNeg ? const Color(0xFFB00020) : const Color(0xFF1B7A4A);
+
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Title row ───────────────────────────────────────────────
+            Row(
+              children: [
+                Text(
+                  'Total Balance',
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 13,
+                  ),
+                ),
+                const Spacer(),
+                // Negative indicator icon
+                if (isNeg)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: Icon(Icons.trending_down_rounded,
+                        size: 14, color: Colors.red.shade400),
+                  ),
+              ],
+            ),
+
+            const SizedBox(height: 8),
+
+            // ── Value ────────────────────────────────────────────────────
+            Text(
+              CurrencyFormatter.format(value),
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: valColor,
+                letterSpacing: -0.5,
+              ),
+            ),
+
+            const SizedBox(height: 2),
+
+            // ── Sub-label: what the other mode would show ────────────────
+            Text(
+              isTotality
+                  ? 'WFP Budget − Disbursed'
+                  : 'Activity AR − Disbursed',
+              style: TextStyle(fontSize: 10, color: Colors.grey.shade400),
+            ),
+
+            const SizedBox(height: 12),
+
+            // ── Toggle ───────────────────────────────────────────────────
+            Container(
+              height: 30,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0F4F7),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  _ToggleTab(
+                    label: 'Activity',
+                    active: !isTotality,
+                    onTap: () => onToggle(false),
+                    tooltip: 'Sum of (Activity AR − Disbursed) per activity row',
+                  ),
+                  _ToggleTab(
+                    label: 'Totality',
+                    active: isTotality,
+                    onTap: () => onToggle(true),
+                    tooltip: 'Total WFP Budget − Total Disbursed across all activities',
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ToggleTab extends StatelessWidget {
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  final String tooltip;
+
+  const _ToggleTab({
+    required this.label,
+    required this.active,
+    required this.onTap,
+    required this.tooltip,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Tooltip(
+        message: tooltip,
+        preferBelow: false,
+        child: GestureDetector(
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            height: 30,
+            decoration: BoxDecoration(
+              color: active ? _primary : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: active ? Colors.white : _muted,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Deadline Warning Banner ──────────────────────────────────────────────────
+
+class _DeadlineBanner extends StatelessWidget {
+  final AppState appState;
+  final void Function(int) onNavigate;
+
+  const _DeadlineBanner({required this.appState, required this.onNavigate});
+
+  Color _urgencyColor(int? days) {
+    if (days == null) return Colors.grey.shade400;
+    if (days < 0)   return const Color(0xFFB00020);
+    if (days <= 3)  return const Color(0xFFD32F2F);
+    if (days <= 7)  return const Color(0xFFE65100);
+    return const Color(0xFFF57C00);
+  }
+
+  String _daysLabel(int? days) {
+    if (days == null) return 'No date';
+    if (days < 0)    return 'Overdue ${-days}d';
+    if (days == 0)   return 'Due today';
+    return 'Due in ${days}d';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final wfps       = appState.wfpsDueSoon;
+    final activities = appState.activitiesDueSoon;
+    final total      = appState.deadlineWarningCount;
+
+    // Combine and take up to 4 preview items, most urgent first
+    final previews = <({String id, String name, String sub, int? days})>[];
+    for (final e in wfps) {
+      previews.add((id: e.id, name: e.title, sub: '${e.fundType} · ${e.year}', days: e.daysUntilDue));
+    }
+    for (final a in activities) {
+      previews.add((id: a.id, name: a.name, sub: 'Activity · ${a.wfpId}', days: a.daysUntilTarget));
+    }
+    previews.sort((a, b) {
+      final da = a.days ?? 999;
+      final db = b.days ?? 999;
+      return da.compareTo(db);
+    });
+    final shown = previews.take(4).toList();
+    final hidden = total - shown.length;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF8F0),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFFCC80), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.orange.withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Banner header ───────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 14, 14, 10),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFE0B2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.schedule_rounded,
+                    color: Color(0xFFE65100),
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '$total item${total == 1 ? '' : 's'} due within '
+                        '${appState.warningDays} days',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          color: Color(0xFF4E2600),
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${wfps.length} WFP entr${wfps.length == 1 ? 'y' : 'ies'}  ·  '
+                        '${activities.length} activit${activities.length == 1 ? 'y' : 'ies'}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF8D4E00),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFFE65100),
+                    backgroundColor: const Color(0xFFFFE0B2),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 8),
+                  ),
+                  icon: const Icon(Icons.open_in_new_rounded, size: 14),
+                  label: const Text('View All',
+                      style: TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.w700)),
+                  onPressed: () => onNavigate(4),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Divider ─────────────────────────────────────────────────────
+          const Divider(height: 1, color: Color(0xFFFFCC80)),
+
+          // ── Preview items ────────────────────────────────────────────────
+          ...shown.asMap().entries.map((entry) {
+            final i    = entry.key;
+            final item = entry.value;
+            final uc   = _urgencyColor(item.days);
+            final isLast = i == shown.length - 1 && hidden == 0;
+
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 18, vertical: 10),
+                  child: Row(
+                    children: [
+                      // Urgency dot
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: uc,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // ID
+                      SizedBox(
+                        width: 150,
+                        child: Text(
+                          item.id,
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 10,
+                            color: _accent,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Name
+                      Expanded(
+                        child: Text(
+                          item.name,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: _ink,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Sub
+                      Text(
+                        item.sub,
+                        style: const TextStyle(
+                            fontSize: 11, color: _muted),
+                      ),
+                      const SizedBox(width: 14),
+                      // Days badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 9, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: uc.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          _daysLabel(item.days),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: uc,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (!isLast)
+                  const Divider(
+                      height: 1, color: Color(0xFFFFE0B2),
+                      indent: 38, endIndent: 18),
+              ],
+            );
+          }),
+
+          // ── "And N more" footer ──────────────────────────────────────────
+          if (hidden > 0)
+            InkWell(
+              onTap: () => onNavigate(4),
+              borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(14)),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFFECCC),
+                  borderRadius: BorderRadius.vertical(
+                      bottom: Radius.circular(14)),
+                ),
+                child: Center(
+                  child: Text(
+                    '+ $hidden more — tap to view all deadlines',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFFE65100),
+                    ),
+                  ),
+                ),
+              ),
+            )
+          else
+            const SizedBox(height: 4),
+        ],
+      ),
+    );
+  }
+}
+
 // ─── Panel Card ───────────────────────────────────────────────────────────────
 
 class _PanelCard extends StatelessWidget {
@@ -980,7 +1413,6 @@ class _PanelCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: _border),
             boxShadow: [BoxShadow(
-              // color: Colors.black.withValues(alpha: 0.04),
               color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 8, offset: const Offset(0, 2))],
           ),
@@ -989,7 +1421,6 @@ class _PanelCard extends StatelessWidget {
             Container(
               width: 48, height: 48,
               decoration: BoxDecoration(
-                // color: color.withValues(alpha: 0.1),
                 color: color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -1006,7 +1437,6 @@ class _PanelCard extends StatelessWidget {
                   color: _muted, fontSize: 12)),
               ],
             )),
-            // Icon(Icons.arrow_forward_ios_rounded, size: 13, color: _muted.withValues(alpha: 0.7)),
             Icon(Icons.arrow_forward_ios_rounded, size: 13, color: _muted.withValues(alpha: 0.7)),
           ]),
         ),
