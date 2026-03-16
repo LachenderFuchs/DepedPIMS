@@ -5,6 +5,14 @@ import '../models/wfp_entry.dart';
 import '../services/app_state.dart';
 import '../utils/currency_formatter.dart';
 
+// ScrollBehavior that prevents the framework from inserting any automatic
+// platform scrollbars. We wrap the page with this so only our explicit
+// page-edge scrollbar is visible.
+class _NoScrollbarBehavior extends ScrollBehavior {
+  @override
+  Widget buildScrollbar(BuildContext context, Widget child, ScrollableDetails details) => child;
+}
+
 class WFPManagementPage extends StatefulWidget {
   final AppState appState;
   const WFPManagementPage({super.key, required this.appState});
@@ -327,7 +335,9 @@ class WFPManagementPageState extends State<WFPManagementPage> {
       builder: (context, _) {
         final isLoading = widget.appState.isLoading;
 
-                return Scrollbar(
+                return ScrollConfiguration(
+          behavior: _NoScrollbarBehavior(),
+          child: Scrollbar(
           controller: _vScrollController,
           thumbVisibility: true,
           trackVisibility: true,
@@ -640,6 +650,12 @@ class WFPManagementPageState extends State<WFPManagementPage> {
                   // and only scale the painted content. This ensures zooming
                   // changes visual size without shrinking the layout used
                   // for measuring columns/rows (so columns/rows don't drop).
+                  // Reintroduce a horizontal scrollbar. To avoid scrolling past
+                  // the painted columns (blank space) when zooming above the
+                  // baseline, we switch to a layout-sized table equal to the
+                  // visual size (baseWidth * _zoom). For zooms at or below the
+                  // baseline we keep the original Transform.scale approach so
+                  // columns continue to be measured at baseWidth.
                   return Scrollbar(
                     controller: _hScrollController,
                     thumbVisibility: _zoom > _baselineZoom,
@@ -648,15 +664,12 @@ class WFPManagementPageState extends State<WFPManagementPage> {
                       physics: _zoom <= _baselineZoom ? const NeverScrollableScrollPhysics() : const ClampingScrollPhysics(),
                       controller: _hScrollController,
                       scrollDirection: Axis.horizontal,
-                      child: SizedBox(
-                        width: baseWidth,
-                        height: _tableHeight,
-                        child: Transform.scale(
-                          scale: _zoom,
-                          alignment: Alignment.topLeft,
-                          child: SizedBox(
-                            width: baseWidth,
-                            height: _tableHeight,
+                      child: Builder(builder: (ctx) {
+                        final useExpandedLayout = _zoom > _baselineZoom;
+                        if (useExpandedLayout) {
+                          return SizedBox(
+                            width: baseWidth * _zoom,
+                            height: _tableHeight * _zoom,
                             child: DataTable2(
                               minWidth: _tableMinWidth,
                               sortColumnIndex: _sortColumnIndex,
@@ -667,115 +680,152 @@ class WFPManagementPageState extends State<WFPManagementPage> {
                               columnSpacing: 16,
                               horizontalMargin: 12,
                               columns: [
-                          DataColumn2(label: const Text('WFP ID'),
-                              size: ColumnSize.M, onSort: _onSort),
-                          DataColumn2(label: const Text('Title'),
-                              size: ColumnSize.L, onSort: _onSort),
-                          DataColumn2(label: const Text('Target Size'),
-                              size: ColumnSize.M, onSort: _onSort),
-                          DataColumn2(label: const Text('Fund Type'),
-                              size: ColumnSize.S, onSort: _onSort),
-                          DataColumn2(label: const Text('Year'),
-                              size: ColumnSize.S, numeric: true, onSort: _onSort),
-                          DataColumn2(label: const Text('Amount'),
-                              size: ColumnSize.M, numeric: true, onSort: _onSort),
-                          DataColumn2(label: const Text('Approval'),
-                              size: ColumnSize.S, onSort: _onSort),
-                          DataColumn2(label: const Text('Due Date'),
-                              size: ColumnSize.S, onSort: _onSort),
-                          const DataColumn2(label: Text('Actions'),
-                              size: ColumnSize.S),
-                        ],
-                        rows: _pagedRows.asMap().entries.map((entry) {
-                          final i           = entry.key;
-                          final e           = entry.value;
-                          final isEditing   = _editingEntry?.id == e.id;
-                          final isPending   = e.approvalStatus == 'Pending';
-                          final approvalClr = _approvalColor(e.approvalStatus);
-                          final daysUntil   = e.daysUntilDue;
+                                DataColumn2(label: const Text('WFP ID'), size: ColumnSize.M, onSort: _onSort),
+                                DataColumn2(label: const Text('Title'), size: ColumnSize.L, onSort: _onSort),
+                                DataColumn2(label: const Text('Target Size'), size: ColumnSize.M, onSort: _onSort),
+                                DataColumn2(label: const Text('Fund Type'), size: ColumnSize.S, onSort: _onSort),
+                                DataColumn2(label: const Text('Year'), size: ColumnSize.S, numeric: true, onSort: _onSort),
+                                DataColumn2(label: const Text('Amount'), size: ColumnSize.M, numeric: true, onSort: _onSort),
+                                DataColumn2(label: const Text('Approval'), size: ColumnSize.S, onSort: _onSort),
+                                DataColumn2(label: const Text('Due Date'), size: ColumnSize.S, onSort: _onSort),
+                                const DataColumn2(label: Text('Actions'), size: ColumnSize.S),
+                              ],
+                              rows: _pagedRows.asMap().entries.map((entry) {
+                                final i = entry.key;
+                                final e = entry.value;
+                                final isEditing = _editingEntry?.id == e.id;
+                                final isPending = e.approvalStatus == 'Pending';
+                                final approvalClr = _approvalColor(e.approvalStatus);
+                                final daysUntil = e.daysUntilDue;
 
-                          return DataRow2(
-                            color: WidgetStateProperty.resolveWith((_) {
-                              if (isEditing) return Colors.blue.shade50;
-                              if (isPending) return Colors.orange.shade50;
-                              return i.isEven ? Colors.white : Colors.grey.shade50;
-                            }),
-                            cells: [
-                              DataCell(Row(children: [
-                                if (isPending)
-                                  Container(
-                                    width: 3, height: 28,
-                                    margin: const EdgeInsets.only(right: 6),
-                                    decoration: BoxDecoration(
-                                      color: Colors.orange.shade400,
-                                      borderRadius: BorderRadius.circular(2),
-                                    ),
-                                  ),
-                                Text(e.id, style: const TextStyle(
-                                    fontFamily: 'monospace', fontSize: 12)),
-                              ])),
-                              DataCell(Text(e.title)),
-                              DataCell(Text(e.targetSize)),
-                              DataCell(Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xff2F3E46).withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(e.fundType, style: const TextStyle(fontSize: 12)),
-                              )),
-                              DataCell(Text(e.year.toString())),
-                              DataCell(Text(CurrencyFormatter.format(e.amount))),
-                              DataCell(Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: approvalClr.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(e.approvalStatus, style: TextStyle(
-                                    fontSize: 11, color: approvalClr,
-                                    fontWeight: FontWeight.w600)),
-                              )),
-                              DataCell(e.dueDate == null
-                                  ? Text('—', style: TextStyle(color: Colors.grey.shade400))
-                                  : Row(children: [
+                                return DataRow2(
+                                  color: WidgetStateProperty.resolveWith((_) {
+                                    if (isEditing) return Colors.blue.shade50;
+                                    if (isPending) return Colors.orange.shade50;
+                                    return i.isEven ? Colors.white : Colors.grey.shade50;
+                                  }),
+                                  cells: [
+                                    DataCell(Row(children: [
+                                      if (isPending)
+                                        Container(
+                                          width: 3, height: 28,
+                                          margin: const EdgeInsets.only(right: 6),
+                                          decoration: BoxDecoration(
+                                            color: Colors.orange.shade400,
+                                            borderRadius: BorderRadius.circular(2),
+                                          ),
+                                        ),
+                                      Text(e.id, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+                                    ])),
+                                    DataCell(Text(e.title)),
+                                    DataCell(Text(e.targetSize)),
+                                    DataCell(Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xff2F3E46).withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(e.fundType, style: const TextStyle(fontSize: 12)),
+                                    )),
+                                    DataCell(Text(e.year.toString())),
+                                    DataCell(Text(CurrencyFormatter.format(e.amount))),
+                                    DataCell(Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: approvalClr.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(e.approvalStatus, style: TextStyle(fontSize: 11, color: approvalClr, fontWeight: FontWeight.w600)),
+                                    )),
+                                    DataCell(e.dueDate == null ? Text('—', style: TextStyle(color: Colors.grey.shade400)) : Row(children: [
                                       if (daysUntil != null && daysUntil <= 7)
                                         Padding(
                                           padding: const EdgeInsets.only(right: 4),
-                                          child: Icon(Icons.warning_amber_rounded, size: 14,
-                                            color: daysUntil < 0 ? Colors.red : Colors.orange),
+                                          child: Icon(Icons.warning_amber_rounded, size: 14, color: daysUntil < 0 ? Colors.red : Colors.orange),
                                         ),
-                                      Text(e.dueDate!, style: TextStyle(
-                                        fontSize: 12,
-                                        color: daysUntil != null && daysUntil < 0
-                                            ? Colors.red.shade600 : Colors.black87,
-                                      )),
+                                      Text(e.dueDate!, style: TextStyle(fontSize: 12, color: daysUntil != null && daysUntil < 0 ? Colors.red.shade600 : Colors.black87)),
                                     ])),
-                              DataCell(Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit, size: 18, color: Colors.blueGrey),
-                                    tooltip: 'Edit',
-                                    onPressed: () => _loadEntryIntoForm(e),
-                                  ),
-                                  IconButton(
-                                    icon: Icon(Icons.delete, size: 18, color: Colors.red.shade400),
-                                    tooltip: 'Delete',
-                                    onPressed: () => _confirmDelete(e),
-                                  ),
-                                ],
-                              )),
-                            ],
+                                    DataCell(Row(mainAxisSize: MainAxisSize.min, children: [
+                                      IconButton(icon: const Icon(Icons.edit, size: 18, color: Colors.blueGrey), tooltip: 'Edit', onPressed: () => _loadEntryIntoForm(e)),
+                                      IconButton(icon: Icon(Icons.delete, size: 18, color: Colors.red.shade400), tooltip: 'Delete', onPressed: () => _confirmDelete(e)),
+                                    ])),
+                                  ],
+                                );
+                              }).toList(),
+                            ),
                           );
-                        }).toList(),
-                      ), // DataTable2
-                    ), // inner SizedBox
-                  ), // Transform.scale
-                ), // outer SizedBox
-              ), // SingleChildScrollView
-            ); // Scrollbar
-          }),
+                        } else {
+                          // keep previous approach where layout width = baseWidth
+                          // but painting is scaled so columns are measured at
+                          // baseWidth (prevents column collapse on zoom out)
+                          return SizedBox(
+                            width: baseWidth,
+                            height: _tableHeight,
+                            child: Transform.scale(
+                              scale: _zoom,
+                              alignment: Alignment.topLeft,
+                              child: SizedBox(
+                                width: baseWidth,
+                                height: _tableHeight,
+                                child: DataTable2(
+                                  minWidth: _tableMinWidth,
+                                  sortColumnIndex: _sortColumnIndex,
+                                  sortAscending: _sortAscending,
+                                  headingRowColor: WidgetStateProperty.all(const Color(0xff2F3E46)),
+                                  headingTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                  columnSpacing: 16,
+                                  horizontalMargin: 12,
+                                  columns: [
+                                    DataColumn2(label: const Text('WFP ID'), size: ColumnSize.M, onSort: _onSort),
+                                    DataColumn2(label: const Text('Title'), size: ColumnSize.L, onSort: _onSort),
+                                    DataColumn2(label: const Text('Target Size'), size: ColumnSize.M, onSort: _onSort),
+                                    DataColumn2(label: const Text('Fund Type'), size: ColumnSize.S, onSort: _onSort),
+                                    DataColumn2(label: const Text('Year'), size: ColumnSize.S, numeric: true, onSort: _onSort),
+                                    DataColumn2(label: const Text('Amount'), size: ColumnSize.M, numeric: true, onSort: _onSort),
+                                    DataColumn2(label: const Text('Approval'), size: ColumnSize.S, onSort: _onSort),
+                                    DataColumn2(label: const Text('Due Date'), size: ColumnSize.S, onSort: _onSort),
+                                    const DataColumn2(label: Text('Actions'), size: ColumnSize.S),
+                                  ],
+                                  rows: _pagedRows.asMap().entries.map((entry) {
+                                    final i = entry.key;
+                                    final e = entry.value;
+                                    final isEditing = _editingEntry?.id == e.id;
+                                    final isPending = e.approvalStatus == 'Pending';
+                                    final approvalClr = _approvalColor(e.approvalStatus);
+                                    final daysUntil = e.daysUntilDue;
+
+                                    return DataRow2(
+                                      color: WidgetStateProperty.resolveWith((_) {
+                                        if (isEditing) return Colors.blue.shade50;
+                                        if (isPending) return Colors.orange.shade50;
+                                        return i.isEven ? Colors.white : Colors.grey.shade50;
+                                      }),
+                                      cells: [
+                                        DataCell(Row(children: [
+                                          if (isPending)
+                                            Container(width: 3, height: 28, margin: const EdgeInsets.only(right: 6), decoration: BoxDecoration(color: Colors.orange.shade400, borderRadius: BorderRadius.circular(2))),
+                                          Text(e.id, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+                                        ])),
+                                        DataCell(Text(e.title)),
+                                        DataCell(Text(e.targetSize)),
+                                        DataCell(Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: const Color(0xff2F3E46).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)), child: Text(e.fundType, style: const TextStyle(fontSize: 12)))),
+                                        DataCell(Text(e.year.toString())),
+                                        DataCell(Text(CurrencyFormatter.format(e.amount))),
+                                        DataCell(Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: approvalClr.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)), child: Text(e.approvalStatus, style: TextStyle(fontSize: 11, color: approvalClr, fontWeight: FontWeight.w600)))),
+                                        DataCell(e.dueDate == null ? Text('—', style: TextStyle(color: Colors.grey.shade400)) : Row(children: [ if (daysUntil != null && daysUntil <= 7) Padding(padding: const EdgeInsets.only(right: 4), child: Icon(Icons.warning_amber_rounded, size: 14, color: daysUntil < 0 ? Colors.red : Colors.orange)), Text(e.dueDate!, style: TextStyle(fontSize: 12, color: daysUntil != null && daysUntil < 0 ? Colors.red.shade600 : Colors.black87)), ])),
+                                        DataCell(Row(mainAxisSize: MainAxisSize.min, children: [ IconButton(icon: const Icon(Icons.edit, size: 18, color: Colors.blueGrey), tooltip: 'Edit', onPressed: () => _loadEntryIntoForm(e)), IconButton(icon: Icon(Icons.delete, size: 18, color: Colors.red.shade400), tooltip: 'Delete', onPressed: () => _confirmDelete(e)), ])),
+                                      ],
+                                    );
+                                  }).toList(),
+                                ), // DataTable2
+                              ), // inner SizedBox
+                            ), // Transform.scale
+                          );
+                        }
+                      }),
+                    ), // SingleChildScrollView
+                  );
+            }),
 
                 // ── Pagination ─────────────────────────────────────────
                 _PaginationBar(
@@ -788,12 +838,13 @@ class WFPManagementPageState extends State<WFPManagementPage> {
 
                 const SizedBox(height: 24),
               ],
-            ),
-          ),
-        ),
-      );
-      },
-    );
+            ), // Column
+          ), // SingleChildScrollView
+        ), // Padding
+      ), // Scrollbar
+    ); // ScrollConfiguration
+  }, // builder
+    ); // ListenableBuilder
   }
 }
 
