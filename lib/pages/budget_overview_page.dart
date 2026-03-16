@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/decimal_input_formatter.dart';
 import 'package:data_table_2/data_table_2.dart';
 import '../models/budget_activity.dart';
 import '../models/wfp_entry.dart';
@@ -48,6 +49,8 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
     _scrollController.dispose();
     super.dispose();
   }
+
+  
 
   // ─── WFP filtering + sort ─────────────────────────────────────────────────
 
@@ -598,14 +601,17 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                             decoration: const InputDecoration(labelText: 'Activity Name *'));
                           final totalField = TextField(controller: _total,
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            inputFormatters: const [DecimalTextInputFormatter()],
                             decoration: const InputDecoration(labelText: 'Total Amount (₱)'),
                             onChanged: (_) => _onAmountChanged());
                           final projField = TextField(controller: _projected,
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            inputFormatters: const [DecimalTextInputFormatter()],
                             decoration: const InputDecoration(labelText: 'Projected / Obligated (₱)'),
                             onChanged: (_) => _onAmountChanged());
                           final disbField = TextField(controller: _disbursed,
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            inputFormatters: const [DecimalTextInputFormatter()],
                             decoration: const InputDecoration(labelText: 'Disbursed (₱)'),
                             onChanged: (_) => _onAmountChanged());
                           final statusDd = DropdownButton<String>(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/decimal_input_formatter.dart';
 import 'package:data_table_2/data_table_2.dart';
 import '../models/wfp_entry.dart';
 import '../services/app_state.dart';
@@ -48,7 +49,9 @@ class WFPManagementPageState extends State<WFPManagementPage> {
 
   // Zoom & scrolling
   double _zoom = 0.85;
+  static const double _baselineZoom = 0.85; // treat this as the app's "100%"
   final ScrollController _hScrollController = ScrollController();
+  final ScrollController _vScrollController = ScrollController();
   static const double _minZoom = 0.6;
   static const double _maxZoom = 1.6;
   static const double _zoomStep = 0.1;
@@ -56,8 +59,8 @@ class WFPManagementPageState extends State<WFPManagementPage> {
   void _clampHorizontalScroll() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_hScrollController.hasClients) return;
-      // When zoom <= 0.85 we disable horizontal scrolling — reset to start.
-      if (_zoom <= 0.85) {
+      // When zoom <= baseline we disable horizontal scrolling — reset to start.
+      if (_zoom <= _baselineZoom) {
         _hScrollController.jumpTo(0.0);
         return;
       }
@@ -162,8 +165,11 @@ class WFPManagementPageState extends State<WFPManagementPage> {
     _amount.dispose();
     _search.dispose();
     _hScrollController.dispose();
+    _vScrollController.dispose();
     super.dispose();
   }
+
+  
 
   // ─── Date Pickers ─────────────────────────────────────────────────────────
 
@@ -321,9 +327,14 @@ class WFPManagementPageState extends State<WFPManagementPage> {
       builder: (context, _) {
         final isLoading = widget.appState.isLoading;
 
-        return Padding(
+                return Scrollbar(
+          controller: _vScrollController,
+          thumbVisibility: true,
+          trackVisibility: true,
+          child: Padding(
           padding: const EdgeInsets.all(24),
           child: SingleChildScrollView(
+            controller: _vScrollController,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -411,6 +422,7 @@ class WFPManagementPageState extends State<WFPManagementPage> {
                           final amountField = TextField(
                             controller: _amount,
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            inputFormatters: const [DecimalTextInputFormatter()],
                             decoration: const InputDecoration(
                                 labelText: 'Amount (₱) *', prefixText: '₱ '),
                           );
@@ -596,12 +608,12 @@ class WFPManagementPageState extends State<WFPManagementPage> {
                       _clampHorizontalScroll();
                     } : null,
                   ),
-                  Text('${(_zoom * 100).round()}%'),
+                  Text('${(_zoom / _baselineZoom * 100).round()}%'),
                   IconButton(
                     tooltip: 'Reset zoom',
                     icon: const Icon(Icons.refresh),
                     onPressed: () {
-                      setState(() => _zoom = 1.0);
+                      setState(() => _zoom = _baselineZoom);
                       _clampHorizontalScroll();
                     },
                   ),
@@ -630,10 +642,10 @@ class WFPManagementPageState extends State<WFPManagementPage> {
                   // for measuring columns/rows (so columns/rows don't drop).
                   return Scrollbar(
                     controller: _hScrollController,
-                    thumbVisibility: _zoom > 0.85,
-                    trackVisibility: _zoom > 0.85,
+                    thumbVisibility: _zoom > _baselineZoom,
+                    trackVisibility: _zoom > _baselineZoom,
                     child: SingleChildScrollView(
-                      physics: _zoom <= 0.85 ? const NeverScrollableScrollPhysics() : const ClampingScrollPhysics(),
+                      physics: _zoom <= _baselineZoom ? const NeverScrollableScrollPhysics() : const ClampingScrollPhysics(),
                       controller: _hScrollController,
                       scrollDirection: Axis.horizontal,
                       child: SizedBox(
@@ -778,7 +790,8 @@ class WFPManagementPageState extends State<WFPManagementPage> {
               ],
             ),
           ),
-        );
+        ),
+      );
       },
     );
   }
