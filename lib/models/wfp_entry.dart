@@ -5,6 +5,11 @@ class WFPEntry {
   final String indicator;
   final int year;
   final String fundType;
+
+  /// Section/division this WFP belongs to.
+  /// One of: HRD, SMME, PRS, YFB, SHNS, EFS, SMNS, Sports
+  final String viewSection;
+
   final double amount;
 
   /// Approval lifecycle: 'Pending' | 'Approved' | 'Rejected'
@@ -25,6 +30,7 @@ class WFPEntry {
     required this.indicator,
     required this.year,
     required this.fundType,
+    this.viewSection = 'HRD',
     required this.amount,
     this.approvalStatus = 'Pending',
     this.approvedDate,
@@ -49,6 +55,7 @@ class WFPEntry {
     String? indicator,
     int? year,
     String? fundType,
+    String? viewSection,
     double? amount,
     String? approvalStatus,
     String? approvedDate,
@@ -63,6 +70,7 @@ class WFPEntry {
       indicator: indicator ?? this.indicator,
       year: year ?? this.year,
       fundType: fundType ?? this.fundType,
+      viewSection: viewSection ?? this.viewSection,
       amount: amount ?? this.amount,
       approvalStatus: approvalStatus ?? this.approvalStatus,
       approvedDate: clearApprovedDate ? null : (approvedDate ?? this.approvedDate),
@@ -77,6 +85,7 @@ class WFPEntry {
         'indicator': indicator,
         'year': year,
         'fundType': fundType,
+        'viewSection': viewSection,
         'amount': amount,
         'approvalStatus': approvalStatus,
         'approvedDate': approvedDate,
@@ -90,6 +99,7 @@ class WFPEntry {
         indicator: map['indicator'] as String,
         year: map['year'] as int,
         fundType: map['fundType'] as String,
+        viewSection: (map['viewSection'] as String?) ?? 'HRD',
         amount: (map['amount'] as num).toDouble(),
         approvalStatus: (map['approvalStatus'] as String?) ?? 'Pending',
         approvedDate: map['approvedDate'] as String?,
@@ -97,7 +107,7 @@ class WFPEntry {
       );
 
   @override
-  String toString() => 'WFPEntry($id, $title, $fundType, $year, $approvalStatus)';
+  String toString() => 'WFPEntry($id, $title, $fundType, $viewSection, $year, $approvalStatus)';
 
   @override
   bool operator ==(Object other) => other is WFPEntry && other.id == id;

@@ -4,6 +4,7 @@ import 'package:data_table_2/data_table_2.dart';
 import '../models/wfp_entry.dart';
 import '../services/app_state.dart';
 import '../utils/currency_formatter.dart';
+import '../widgets/pagination_bar.dart';
 
 // ScrollBehavior that prevents the framework from inserting any automatic
 // platform scrollbars. We wrap the page with this so only our explicit
@@ -30,7 +31,7 @@ class WFPManagementPageState extends State<WFPManagementPage> {
 
   int    _selectedYear   = DateTime.now().year < 2026 ? 2026 : DateTime.now().year;
   String _fundType       = 'MODE';
-  String _viewSection    = 'Section A';
+  String _viewSection    = 'HRD';
   String _approvalStatus = 'Pending';
   String? _approvedDate;
   String? _dueDate;
@@ -52,7 +53,7 @@ class WFPManagementPageState extends State<WFPManagementPage> {
     'MODE','GASS','HRTD','LSP','SBFP','PESS','Palaro',
     'BEFF-EAO','BFLP','DPRP','OPDNTP','BEFF-Repair','BEFF-Electric',
   ];
-  static const _sections        = ['Section A', 'Section B', 'Section C'];
+  static const _sections = ['HRD', 'SMME', 'PRS', 'YFB', 'SHNS', 'EFS', 'SMNS', 'Sports'];
   static const _approvalOptions = ['Pending', 'Approved', 'Rejected'];
 
   // Zoom & scrolling
@@ -93,7 +94,8 @@ class WFPManagementPageState extends State<WFPManagementPage> {
             e.year.toString().contains(q) ||
             e.targetSize.toLowerCase().contains(q) ||
             e.indicator.toLowerCase().contains(q) ||
-            e.approvalStatus.toLowerCase().contains(q),
+            e.approvalStatus.toLowerCase().contains(q) ||
+            e.viewSection.toLowerCase().contains(q),
           ).toList();
 
     filtered.sort((a, b) {
@@ -103,9 +105,10 @@ class WFPManagementPageState extends State<WFPManagementPage> {
         case 1: cmp = a.title.compareTo(b.title); break;
         case 2: cmp = a.targetSize.compareTo(b.targetSize); break;
         case 3: cmp = a.fundType.compareTo(b.fundType); break;
-        case 4: cmp = a.year.compareTo(b.year); break;
-        case 5: cmp = a.amount.compareTo(b.amount); break;
-        case 6: cmp = a.approvalStatus.compareTo(b.approvalStatus); break;
+        case 4: cmp = a.viewSection.compareTo(b.viewSection); break;
+        case 5: cmp = a.year.compareTo(b.year); break;
+        case 6: cmp = a.amount.compareTo(b.amount); break;
+        case 7: cmp = a.approvalStatus.compareTo(b.approvalStatus); break;
         default: cmp = 0;
       }
       return _sortAscending ? cmp : -cmp;
@@ -148,6 +151,7 @@ class WFPManagementPageState extends State<WFPManagementPage> {
     setState(() {
       _selectedYear   = entry.year;
       _fundType       = entry.fundType;
+      _viewSection    = entry.viewSection;
       _approvalStatus = entry.approvalStatus;
       _approvedDate   = entry.approvedDate;
       _dueDate        = entry.dueDate;
@@ -159,6 +163,7 @@ class WFPManagementPageState extends State<WFPManagementPage> {
     _title.clear(); _targetSize.clear(); _indicator.clear(); _amount.clear();
     setState(() {
       _approvalStatus = 'Pending';
+      _viewSection    = 'HRD';
       _approvedDate   = null;
       _dueDate        = null;
       _editingEntry   = null;
@@ -226,7 +231,7 @@ class WFPManagementPageState extends State<WFPManagementPage> {
       final updated = _editingEntry!.copyWith(
         title: _title.text.trim(), targetSize: _targetSize.text.trim(),
         indicator: _indicator.text.trim(), year: _selectedYear,
-        fundType: _fundType, amount: parsedAmount,
+        fundType: _fundType, viewSection: _viewSection, amount: parsedAmount,
         approvalStatus: _approvalStatus, approvedDate: resolvedApprovedDate,
         clearApprovedDate: resolvedApprovedDate == null,
         dueDate: _dueDate, clearDueDate: _dueDate == null,
@@ -244,7 +249,7 @@ class WFPManagementPageState extends State<WFPManagementPage> {
       final entry = WFPEntry(
         id: id, title: _title.text.trim(), targetSize: _targetSize.text.trim(),
         indicator: _indicator.text.trim(), year: _selectedYear,
-        fundType: _fundType, amount: parsedAmount,
+        fundType: _fundType, viewSection: _viewSection, amount: parsedAmount,
         approvalStatus: _approvalStatus, approvedDate: resolvedApprovedDate,
         dueDate: _dueDate,
       );
@@ -684,6 +689,7 @@ class WFPManagementPageState extends State<WFPManagementPage> {
                                 DataColumn2(label: const Text('Title'), size: ColumnSize.L, onSort: _onSort),
                                 DataColumn2(label: const Text('Target Size'), size: ColumnSize.M, onSort: _onSort),
                                 DataColumn2(label: const Text('Fund Type'), size: ColumnSize.S, onSort: _onSort),
+                                DataColumn2(label: const Text('Section'), size: ColumnSize.S, onSort: _onSort),
                                 DataColumn2(label: const Text('Year'), size: ColumnSize.S, numeric: true, onSort: _onSort),
                                 DataColumn2(label: const Text('Amount'), size: ColumnSize.M, numeric: true, onSort: _onSort),
                                 DataColumn2(label: const Text('Approval'), size: ColumnSize.S, onSort: _onSort),
@@ -726,6 +732,14 @@ class WFPManagementPageState extends State<WFPManagementPage> {
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Text(e.fundType, style: const TextStyle(fontSize: 12)),
+                                    )),
+                                    DataCell(Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xff3A7CA5).withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(e.viewSection, style: const TextStyle(fontSize: 12, color: Color(0xff3A7CA5), fontWeight: FontWeight.w600)),
                                     )),
                                     DataCell(Text(e.year.toString())),
                                     DataCell(Text(CurrencyFormatter.format(e.amount))),
@@ -780,6 +794,7 @@ class WFPManagementPageState extends State<WFPManagementPage> {
                                     DataColumn2(label: const Text('Title'), size: ColumnSize.L, onSort: _onSort),
                                     DataColumn2(label: const Text('Target Size'), size: ColumnSize.M, onSort: _onSort),
                                     DataColumn2(label: const Text('Fund Type'), size: ColumnSize.S, onSort: _onSort),
+                                    DataColumn2(label: const Text('Section'), size: ColumnSize.S, onSort: _onSort),
                                     DataColumn2(label: const Text('Year'), size: ColumnSize.S, numeric: true, onSort: _onSort),
                                     DataColumn2(label: const Text('Amount'), size: ColumnSize.M, numeric: true, onSort: _onSort),
                                     DataColumn2(label: const Text('Approval'), size: ColumnSize.S, onSort: _onSort),
@@ -809,6 +824,7 @@ class WFPManagementPageState extends State<WFPManagementPage> {
                                         DataCell(Text(e.title)),
                                         DataCell(Text(e.targetSize)),
                                         DataCell(Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: const Color(0xff2F3E46).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)), child: Text(e.fundType, style: const TextStyle(fontSize: 12)))),
+                                        DataCell(Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: const Color(0xff3A7CA5).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)), child: Text(e.viewSection, style: const TextStyle(fontSize: 12, color: Color(0xff3A7CA5), fontWeight: FontWeight.w600)))),
                                         DataCell(Text(e.year.toString())),
                                         DataCell(Text(CurrencyFormatter.format(e.amount))),
                                         DataCell(Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: approvalClr.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)), child: Text(e.approvalStatus, style: TextStyle(fontSize: 11, color: approvalClr, fontWeight: FontWeight.w600)))),
@@ -828,7 +844,7 @@ class WFPManagementPageState extends State<WFPManagementPage> {
             }),
 
                 // ── Pagination ─────────────────────────────────────────
-                _PaginationBar(
+                PaginationBar(
                   currentPage:   _currentPage,
                   totalPages:    _totalPages,
                   totalItems:    _filtered.length,
@@ -845,92 +861,5 @@ class WFPManagementPageState extends State<WFPManagementPage> {
     ); // ScrollConfiguration
   }, // builder
     ); // ListenableBuilder
-  }
-}
-
-// ─── Pagination Bar ───────────────────────────────────────────────────────────
-
-class _PaginationBar extends StatelessWidget {
-  final int currentPage;
-  final int totalPages;
-  final int totalItems;
-  final int rowsPerPage;
-  final void Function(int) onPageChanged;
-
-  const _PaginationBar({
-    required this.currentPage,
-    required this.totalPages,
-    required this.totalItems,
-    required this.rowsPerPage,
-    required this.onPageChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final start = totalItems == 0 ? 0 : currentPage * rowsPerPage + 1;
-    final end   = ((currentPage + 1) * rowsPerPage).clamp(0, totalItems);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        border: Border(top: BorderSide(color: Colors.grey.shade200)),
-      ),
-      child: Row(
-        children: [
-          Text('Showing $start–$end of $totalItems entries',
-            style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
-          const Spacer(),
-          IconButton(
-            icon: const Icon(Icons.first_page), tooltip: 'First page', iconSize: 20,
-            onPressed: currentPage > 0 ? () => onPageChanged(0) : null),
-          IconButton(
-            icon: const Icon(Icons.chevron_left), tooltip: 'Previous page', iconSize: 20,
-            onPressed: currentPage > 0 ? () => onPageChanged(currentPage - 1) : null),
-          ...List.generate(totalPages, (i) => i)
-              .where((i) => i == 0 || i == totalPages - 1 || (i - currentPage).abs() <= 1)
-              .fold<List<Widget>>([], (acc, i) {
-                if (acc.isNotEmpty) {
-                  final prev = int.tryParse(
-                      (acc.last as dynamic)?.key?.toString() ?? '') ?? -999;
-                  if (i - prev > 1) {
-                    acc.add(Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Text('…', style: TextStyle(color: Colors.grey.shade500))));
-                  }
-                }
-                final isActive = i == currentPage;
-                acc.add(Padding(
-                  key: ValueKey(i),
-                  padding: const EdgeInsets.symmetric(horizontal: 2),
-                  child: InkWell(
-                    onTap: () => onPageChanged(i),
-                    borderRadius: BorderRadius.circular(6),
-                    child: Container(
-                      width: 32, height: 32,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: isActive ? const Color(0xff2F3E46) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: isActive ? const Color(0xff2F3E46) : Colors.grey.shade300),
-                      ),
-                      child: Text('${i + 1}', style: TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w600,
-                        color: isActive ? Colors.white : Colors.grey.shade700)),
-                    ),
-                  ),
-                ));
-                return acc;
-              }),
-          IconButton(
-            icon: const Icon(Icons.chevron_right), tooltip: 'Next page', iconSize: 20,
-            onPressed: currentPage < totalPages - 1 ? () => onPageChanged(currentPage + 1) : null),
-          IconButton(
-            icon: const Icon(Icons.last_page), tooltip: 'Last page', iconSize: 20,
-            onPressed: currentPage < totalPages - 1 ? () => onPageChanged(totalPages - 1) : null),
-        ],
-      ),
-    );
   }
 }

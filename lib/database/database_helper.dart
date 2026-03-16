@@ -21,7 +21,7 @@ class DatabaseHelper {
     _db = await factory.openDatabase(
       dbPath,
       options: OpenDatabaseOptions(
-        version: 4,
+        version: 5,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
       ),
@@ -41,6 +41,7 @@ class DatabaseHelper {
         indicator      TEXT NOT NULL,
         year           INTEGER NOT NULL,
         fundType       TEXT NOT NULL,
+        viewSection    TEXT NOT NULL DEFAULT 'HRD',
         amount         REAL NOT NULL,
         approvalStatus TEXT NOT NULL DEFAULT 'Pending',
         approvedDate   TEXT,
@@ -98,6 +99,10 @@ class DatabaseHelper {
           diffJson    TEXT NOT NULL
         )
       ''');
+    }
+    // v4 → v5: viewSection column on wfp
+    if (oldVersion < 5) {
+      await _addColumnIfMissing(db, 'wfp', 'viewSection', "TEXT NOT NULL DEFAULT 'HRD'");
     }
   }
 

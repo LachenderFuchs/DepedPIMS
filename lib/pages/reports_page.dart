@@ -6,6 +6,7 @@ import '../services/app_state.dart';
 import '../services/report_exporter.dart';
 import '../services/pdf_exporter.dart';
 import '../utils/currency_formatter.dart';
+import '../widgets/pagination_bar.dart';
 
 // ─── Sort options ─────────────────────────────────────────────────────────────
 
@@ -743,7 +744,7 @@ class _ReportsPageState extends State<ReportsPage> {
 
                       // Pagination
                       if (filteredList.isNotEmpty)
-                        _PaginationBar(
+                        PaginationBar(
                           currentPage:   _currentPage,
                           totalPages:    totalPages,
                           totalItems:    filteredList.length,
@@ -1136,95 +1137,5 @@ class _ReportsPageState extends State<ReportsPage> {
         fontSize: 13, fontWeight: FontWeight.bold,
         color: valueColor ?? const Color(0xff2F3E46))),
     ]);
-  }
-}
-
-// ─── Pagination Bar ───────────────────────────────────────────────────────────
-
-class _PaginationBar extends StatelessWidget {
-  final int currentPage, totalPages, totalItems, rowsPerPage;
-  final void Function(int) onPageChanged;
-
-  const _PaginationBar({
-    required this.currentPage, required this.totalPages,
-    required this.totalItems, required this.rowsPerPage,
-    required this.onPageChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final start = totalItems == 0 ? 0 : currentPage * rowsPerPage + 1;
-    final end   = ((currentPage + 1) * rowsPerPage).clamp(0, totalItems);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: Colors.grey.shade200))),
-      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Text('$start–$end of $totalItems',
-          style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-        const SizedBox(width: 12),
-        IconButton(
-          icon: const Icon(Icons.chevron_left), iconSize: 18,
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-          onPressed: currentPage > 0 ? () => onPageChanged(currentPage - 1) : null),
-        ...List.generate(totalPages, (i) => i)
-            .where((i) => i == 0 || i == totalPages - 1 || (i - currentPage).abs() <= 1)
-            .fold<List<Widget>>([], (acc, i) {
-              if (acc.isNotEmpty) {
-                final prev = acc.last is _PageChip
-                    ? (acc.last as _PageChip).page : -999;
-                if (i - prev > 1) {
-                  acc.add(Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 2),
-                    child: Text('…', style: TextStyle(
-                      color: Colors.grey.shade400, fontSize: 12))));
-                }
-              }
-              acc.add(_PageChip(
-                page: i, isActive: i == currentPage,
-                onTap: () => onPageChanged(i)));
-              return acc;
-            }),
-        IconButton(
-          icon: const Icon(Icons.chevron_right), iconSize: 18,
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-          onPressed: currentPage < totalPages - 1
-              ? () => onPageChanged(currentPage + 1) : null),
-      ]),
-    );
-  }
-}
-
-class _PageChip extends StatelessWidget {
-  final int page;
-  final bool isActive;
-  final VoidCallback onTap;
-
-  const _PageChip({required this.page, required this.isActive, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Container(
-          width: 28, height: 28,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: isActive ? const Color(0xff2F3E46) : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: isActive ? const Color(0xff2F3E46) : Colors.grey.shade300)),
-          child: Text('${page + 1}', style: TextStyle(
-            fontSize: 11, fontWeight: FontWeight.w600,
-            color: isActive ? Colors.white : Colors.grey.shade700)),
-        ),
-      ),
-    );
   }
 }

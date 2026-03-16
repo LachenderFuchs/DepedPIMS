@@ -5,6 +5,7 @@ import '../models/budget_activity.dart';
 import '../models/wfp_entry.dart';
 import '../services/app_state.dart';
 import '../utils/currency_formatter.dart';
+import '../widgets/pagination_bar.dart';
 
 class BudgetOverviewPage extends StatefulWidget {
   final AppState appState;
@@ -813,7 +814,7 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                     ),
                   ),
 
-                  _PaginationBar(
+                  PaginationBar(
                     currentPage: _currentPage, totalPages: _totalPages,
                     totalItems: _filteredActivities.length, rowsPerPage: _rowsPerPage,
                     onPageChanged: (p) => setState(() => _currentPage = p),
@@ -896,73 +897,3 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
 }
 
 // ─── Pagination Bar ───────────────────────────────────────────────────────────
-
-class _PaginationBar extends StatelessWidget {
-  final int currentPage, totalPages, totalItems, rowsPerPage;
-  final void Function(int) onPageChanged;
-
-  const _PaginationBar({
-    required this.currentPage, required this.totalPages,
-    required this.totalItems, required this.rowsPerPage,
-    required this.onPageChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final start = totalItems == 0 ? 0 : currentPage * rowsPerPage + 1;
-    final end   = ((currentPage + 1) * rowsPerPage).clamp(0, totalItems);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        border: Border(top: BorderSide(color: Colors.grey.shade200))),
-      child: Row(children: [
-        Text('Showing $start–$end of $totalItems entries',
-          style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
-        const Spacer(),
-        IconButton(icon: const Icon(Icons.first_page), iconSize: 20,
-          onPressed: currentPage > 0 ? () => onPageChanged(0) : null),
-        IconButton(icon: const Icon(Icons.chevron_left), iconSize: 20,
-          onPressed: currentPage > 0 ? () => onPageChanged(currentPage - 1) : null),
-        ...List.generate(totalPages, (i) => i)
-            .where((i) => i == 0 || i == totalPages - 1 || (i - currentPage).abs() <= 1)
-            .fold<List<Widget>>([], (acc, i) {
-              if (acc.isNotEmpty) {
-                final prev = int.tryParse((acc.last as dynamic)?.key?.toString() ?? '') ?? -999;
-                if (i - prev > 1) {
-                  acc.add(Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Text('…', style: TextStyle(color: Colors.grey.shade500))));
-                }
-              }
-              final isActive = i == currentPage;
-              acc.add(Padding(
-                key: ValueKey(i),
-                padding: const EdgeInsets.symmetric(horizontal: 2),
-                child: InkWell(
-                  onTap: () => onPageChanged(i),
-                  borderRadius: BorderRadius.circular(6),
-                  child: Container(
-                    width: 32, height: 32,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: isActive ? const Color(0xff2F3E46) : Colors.transparent,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: isActive ? const Color(0xff2F3E46) : Colors.grey.shade300)),
-                    child: Text('${i + 1}', style: TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w600,
-                      color: isActive ? Colors.white : Colors.grey.shade700)),
-                  ),
-                ),
-              ));
-              return acc;
-            }),
-        IconButton(icon: const Icon(Icons.chevron_right), iconSize: 20,
-          onPressed: currentPage < totalPages - 1 ? () => onPageChanged(currentPage + 1) : null),
-        IconButton(icon: const Icon(Icons.last_page), iconSize: 20,
-          onPressed: currentPage < totalPages - 1 ? () => onPageChanged(totalPages - 1) : null),
-      ]),
-    );
-  }
-}
