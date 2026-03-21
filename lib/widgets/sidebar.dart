@@ -26,28 +26,42 @@ class Sidebar extends StatelessWidget {
               const SizedBox(height: 40),
               const Text(
                 'PIMS DepED',
-                style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
                 'DepED Management System',
-                // style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 10),
-                style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 10),
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  fontSize: 10,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32),
               _item(Icons.dashboard_outlined, 'Dashboard', 0),
               _item(Icons.list_alt_outlined, 'WFP Management', 1),
-              _item(Icons.account_balance_wallet_outlined, 'Budget Overview', 2),
+              _item(
+                Icons.account_balance_wallet_outlined,
+                'Budget Overview',
+                2,
+              ),
               _item(Icons.summarize_outlined, 'Reports', 3),
-              _badgeItem(Icons.schedule_outlined, 'Deadlines', 4, appState.deadlineWarningCount),
+              _badgeItem(
+                Icons.schedule_outlined,
+                'Deadlines',
+                4,
+                appState.deadlineWarningCount,
+              ),
               _item(Icons.settings_outlined, 'Settings', 5),
-              _item(Icons.person_outline, 'Profile', 6),
-              _item(Icons.history, 'Audit Log', 7),
+              _item(Icons.history, 'Audit Log', 6),
               const Spacer(),
               const Divider(color: Colors.white24, height: 1),
               const SizedBox(height: 8),
-              _item(Icons.logout, 'Log Out', 8),
+              _item(Icons.logout, 'Log Out', 7),
               const SizedBox(height: 24),
             ],
           ),
@@ -66,17 +80,28 @@ class Sidebar extends StatelessWidget {
     return _tile(icon, label, index, active, count > 0 ? count : null);
   }
 
-  Widget _tile(IconData icon, String label, int index, bool active, int? badge) {
+  Widget _tile(
+    IconData icon,
+    String label,
+    int index,
+    bool active,
+    int? badge,
+  ) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-        decoration: BoxDecoration(
-        // color: active ? Colors.white.withValues(alpha: 0.15) : Colors.transparent,
-        color: active ? Colors.white.withValues(alpha: 0.15) : Colors.transparent,
+      decoration: BoxDecoration(
+        color: active
+            ? Colors.white.withValues(alpha: 0.15)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
       ),
       child: ListTile(
         dense: true,
-        leading: Icon(icon, color: active ? Colors.white : Colors.white70, size: 20),
+        leading: Icon(
+          icon,
+          color: active ? Colors.white : Colors.white70,
+          size: 20,
+        ),
         title: Text(
           label,
           style: TextStyle(
@@ -94,7 +119,11 @@ class Sidebar extends StatelessWidget {
                 ),
                 child: Text(
                   badge > 99 ? '99+' : '$badge',
-                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               )
             : null,
