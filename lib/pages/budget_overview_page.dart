@@ -4,6 +4,7 @@ import '../models/budget_activity.dart';
 import '../models/wfp_entry.dart';
 import '../services/app_state.dart';
 import '../utils/currency_formatter.dart';
+import '../utils/decimal_input_formatter.dart';
 
 class BudgetOverviewPage extends StatefulWidget {
   final AppState appState;
@@ -233,9 +234,9 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
 
   void _loadActivityIntoForm(BudgetActivity a) {
     _activityName.text = a.name;
-    _total.text = a.total.toString();
-    _projected.text = a.projected.toString();
-    _disbursed.text = a.disbursed.toString();
+    _total.text = CurrencyFormatter.formatPlain(a.total);
+    _projected.text = CurrencyFormatter.formatPlain(a.projected);
+    _disbursed.text = CurrencyFormatter.formatPlain(a.disbursed);
     setState(() {
       _status = a.status;
       _suggestedStatus = null;
@@ -260,9 +261,9 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
   /// Derives a suggested status from the current numeric field values.
   /// Returns null if the suggestion matches the current status (no chip needed).
   String? _computeSuggestedStatus() {
-    final total = double.tryParse(_total.text) ?? 0;
-    final projected = double.tryParse(_projected.text) ?? 0;
-    final disbursed = double.tryParse(_disbursed.text) ?? 0;
+    final total = double.tryParse(_total.text.replaceAll(',', '')) ?? 0;
+    final projected = double.tryParse(_projected.text.replaceAll(',', '')) ?? 0;
+    final disbursed = double.tryParse(_disbursed.text.replaceAll(',', '')) ?? 0;
 
     String suggested;
     if (total <= 0 && disbursed <= 0) {
@@ -298,8 +299,9 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
       lastDate: DateTime(2040),
       helpText: 'Select Target Date',
     );
-    if (picked != null)
+    if (picked != null) {
       setState(() => _targetDate = picked.toIso8601String().substring(0, 10));
+    }
   }
 
   // ─── Submit Activity ──────────────────────────────────────────────────────
@@ -318,9 +320,9 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
       _showSnack('Activity name cannot be empty.', isError: true);
       return;
     }
-    final totalVal = double.tryParse(_total.text);
-    final projectedVal = double.tryParse(_projected.text);
-    final disbursedVal = double.tryParse(_disbursed.text);
+    final totalVal = double.tryParse(_total.text.replaceAll(',', ''));
+    final projectedVal = double.tryParse(_projected.text.replaceAll(',', ''));
+    final disbursedVal = double.tryParse(_disbursed.text.replaceAll(',', ''));
     if (totalVal == null || projectedVal == null || disbursedVal == null) {
       _showSnack('Please enter valid numeric values.', isError: true);
       return;
@@ -374,28 +376,56 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete Activity'),
-        content: Text('Delete "${a.name}" (${a.id})?'),
+        title: const Text('Move Activity to Recycle Bin'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Move "${a.name}" (${a.id}) to the Recycle Bin?'),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: Row(children: [
+                Icon(Icons.info_outline, color: Colors.blue.shade600, size: 16),
+                const SizedBox(width: 8),
+                Expanded(child: Text(
+                  'The activity can be restored from the Recycle Bin in Settings.',
+                  style: TextStyle(color: Colors.blue.shade700, fontSize: 12),
+                )),
+              ]),
+            ),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: const Text('Cancel'),
           ),
-          ElevatedButton(
+          ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade600,
+              backgroundColor: Colors.orange.shade700,
               foregroundColor: Colors.white,
             ),
+            icon: const Icon(Icons.delete_outline, size: 16),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Delete'),
+            label: const Text('Move to Bin'),
           ),
         ],
       ),
     );
     if (confirmed == true) {
-      await widget.appState.deleteActivity(a.id);
-      _showSnack('Activity deleted.');
-      if (_editingActivity?.id == a.id) _clearForm();
+      final ok = await widget.appState.deleteActivity(a.id);
+      if (ok) {
+        _showSnack('Activity moved to Recycle Bin.');
+        if (_editingActivity?.id == a.id) _clearForm();
+      } else {
+        _showSnack(widget.appState.error ?? 'Failed to move activity to Recycle Bin.', isError: true);
+      }
     }
   }
 
@@ -668,10 +698,11 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                                   final daysUntil = e.daysUntilDue;
                                   return DataRow2(
                                     color: WidgetStateProperty.resolveWith((_) {
-                                      if (isSelected)
+                                      if (isSelected) {
                                         return const Color(
                                           0xff2F3E46,
                                         ).withValues(alpha: 0.08);
+                                      }
                                       return i.isEven
                                           ? Colors.white
                                           : Colors.grey.shade50;
@@ -981,6 +1012,7 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                                   const TextInputType.numberWithOptions(
                                     decimal: true,
                                   ),
+                              inputFormatters: [MoneyInputFormatter(decimalRange: 2)],
                               decoration: const InputDecoration(
                                 labelText: 'Total Amount (₱)',
                               ),
@@ -992,6 +1024,7 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                                   const TextInputType.numberWithOptions(
                                     decimal: true,
                                   ),
+                              inputFormatters: [MoneyInputFormatter(decimalRange: 2)],
                               decoration: const InputDecoration(
                                 labelText: 'Projected / Obligated (₱)',
                               ),
@@ -1003,6 +1036,7 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                                   const TextInputType.numberWithOptions(
                                     decimal: true,
                                   ),
+                              inputFormatters: [MoneyInputFormatter(decimalRange: 2)],
                               decoration: const InputDecoration(
                                 labelText: 'Disbursed (₱)',
                               ),
@@ -1729,11 +1763,13 @@ class _PaginationBar extends StatelessWidget {
           const Spacer(),
           IconButton(
             icon: const Icon(Icons.first_page),
+            tooltip: 'First page',
             iconSize: 20,
             onPressed: currentPage > 0 ? () => onPageChanged(0) : null,
           ),
           IconButton(
             icon: const Icon(Icons.chevron_left),
+            tooltip: 'Previous page',
             iconSize: 20,
             onPressed: currentPage > 0
                 ? () => onPageChanged(currentPage - 1)
@@ -1753,7 +1789,7 @@ class _PaginationBar extends StatelessWidget {
                         (acc.last as dynamic)?.key?.toString() ?? '',
                       ) ??
                       -999;
-                  if (i - prev > 1)
+                  if (i - prev > 1) {
                     acc.add(
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -1763,6 +1799,7 @@ class _PaginationBar extends StatelessWidget {
                         ),
                       ),
                     );
+                  }
                 }
                 final isActive = i == currentPage;
                 acc.add(
@@ -1805,6 +1842,7 @@ class _PaginationBar extends StatelessWidget {
               }),
           IconButton(
             icon: const Icon(Icons.chevron_right),
+            tooltip: 'Next page',
             iconSize: 20,
             onPressed: currentPage < totalPages - 1
                 ? () => onPageChanged(currentPage + 1)
@@ -1812,6 +1850,7 @@ class _PaginationBar extends StatelessWidget {
           ),
           IconButton(
             icon: const Icon(Icons.last_page),
+            tooltip: 'Last page',
             iconSize: 20,
             onPressed: currentPage < totalPages - 1
                 ? () => onPageChanged(totalPages - 1)

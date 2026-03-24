@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 import 'pages/login_page.dart';
 import 'services/app_state.dart';
+import 'database/database_helper.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
@@ -24,6 +25,23 @@ void main() async {
   // Boot the shared state and pre-load WFP entries from SQLite.
   final appState = AppState();
   await appState.init();
+
+  // Ensure the auto-backup default is the quick 30s window and schedule
+  // a startup auto-backup after that delay so users get an early snapshot.
+  try {
+    // Adjust session delay to the default; this also cancels any previous timer.
+    // (Settings UI allows changing this for the session.)
+    // ignore: unawaited_futures
+    DatabaseHelper.setAutoBackupDelay(const Duration(seconds: 30));
+  } catch (_) {}
+
+  // Schedule a one-shot trigger after the configured delay so the app makes
+  // an initial consistent snapshot shortly after launch.
+  Future.delayed(const Duration(seconds: 30), () async {
+    try {
+      await DatabaseHelper.triggerAutoBackupNow();
+    } catch (_) {}
+  });
 
   runApp(PIMSApp(appState: appState));
 }

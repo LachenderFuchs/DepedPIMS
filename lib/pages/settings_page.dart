@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 import '../services/app_state.dart';
+import 'recycle_bin_page.dart';
 import '../database/database_helper.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -19,10 +20,12 @@ class _SettingsPageState extends State<SettingsPage> {
   late final TextEditingController _currencyCtrl;
   bool _savingUnit     = false;
   bool _savingCurrency = false;
+  int  _recycleBinCount = 0;
   bool _archiving      = false;
   String? _archiveResult;
   bool _archiveSuccess = false;
   int  _archiveCount   = 0;
+  
 
   // Auto-backup status — polled every 5 seconds so the UI stays current
   Timer? _statusTimer;
@@ -38,6 +41,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _currencyCtrl      = TextEditingController(text: widget.appState.currencySymbol);
     _refreshArchiveCount();
     _refreshAutoStatus();
+    _refreshRecycleBinCount();
     // Poll auto-backup status every 5 s so the UI updates after a backup fires
     _statusTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (mounted) _refreshAutoStatus();
@@ -102,13 +106,20 @@ class _SettingsPageState extends State<SettingsPage> {
             .where((e) => e is File && e.path.endsWith('.db'))
             .length;
       }
-      if (mounted) setState(() {
+      if (mounted) {
+        setState(() {
         _autoBackupTime   = DatabaseHelper.lastAutoBackupTime;
         _autoBackupPath   = DatabaseHelper.lastAutoBackupPath;
         _autoBackupFailed = DatabaseHelper.lastAutoBackupFailed;
         _autoArchiveCount = count;
       });
+      }
     });
+  }
+
+  Future<void> _refreshRecycleBinCount() async {
+    final entries = await widget.appState.getRecycleBinEntries();
+    if (mounted) setState(() => _recycleBinCount = entries.length);
   }
 
   Future<void> _createArchive() async {
@@ -146,6 +157,202 @@ class _SettingsPageState extends State<SettingsPage> {
     final uri = Uri.file(_archiveDir);
     if (await canLaunchUrl(uri)) await launchUrl(uri);
   }
+
+  Future<void> _openSnapshotsDialog() async {
+    final archives = await DatabaseHelper.listArchives();
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        String filter = '';
+        String sortMode = 'newest'; // or 'oldest'
+        int? selectedIdx;
+        Map<String, bool?> integrity = {};
+
+        Future<void> _checkIntegrityFor(String path) async {
+          final ok = await DatabaseHelper.validateArchive(path);
+          integrity[path] = ok;
+        }
+
+        return StatefulBuilder(builder: (ctx2, setState2) {
+          final filtered = archives
+              .where((p) => p.toLowerCase().contains(filter.toLowerCase()))
+              .toList();
+          filtered.sort((a, b) => sortMode == 'newest' ? b.compareTo(a) : a.compareTo(b));
+
+          Widget detailsFor(String path) {
+            final f = File(path);
+            final name = p.basename(path);
+            String sizeTxt = '—';
+            String mtime = '—';
+            try {
+              if (f.existsSync()) {
+                sizeTxt = '${(f.lengthSync() / 1024).toStringAsFixed(1)} KB';
+                mtime = f.lastModifiedSync().toString();
+              }
+            } catch (_) {}
+            final integrityStatus = integrity.containsKey(path)
+                ? (integrity[path] == true ? 'OK' : 'Invalid')
+                : 'Unknown';
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name, style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                Text('Path: $path', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                const SizedBox(height: 4),
+                Text('Size: $sizeTxt  •  Modified: $mtime', style: const TextStyle(fontSize: 12)),
+                const SizedBox(height: 8),
+                Row(children: [
+                  Text('Integrity: ', style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text(integrityStatus, style: TextStyle(color: integrityStatus == 'OK' ? Colors.green.shade700 : Colors.red.shade700)),
+                ]),
+              ],
+            );
+          }
+
+          return AlertDialog(
+            title: Row(children: [const Text('Manage Snapshots'), const Spacer(), IconButton(icon: const Icon(Icons.refresh), onPressed: () async {
+              // Re-scan archives and re-run integrity checks for visible items
+              final newList = await DatabaseHelper.listArchives();
+              archives.clear();
+              archives.addAll(newList);
+              setState2(() {});
+            })]),
+            content: SizedBox(
+              width: 800,
+              height: 420,
+              child: archives.isEmpty
+                  ? const Text('No snapshots found in archives.')
+                  : Row(children: [
+                      // Left: list and controls
+                      Flexible(
+                        flex: 4,
+                        child: Column(children: [
+                          TextField(
+                            decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Filter snapshots by name...'),
+                            onChanged: (v) => setState2(() => filter = v),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(children: [
+                            const SizedBox(width: 6),
+                            ChoiceChip(label: const Text('Newest'), selected: sortMode == 'newest', onSelected: (_) => setState2(() => sortMode = 'newest')),
+                            const SizedBox(width: 8),
+                            ChoiceChip(label: const Text('Oldest'), selected: sortMode == 'oldest', onSelected: (_) => setState2(() => sortMode = 'oldest')),
+                            const Spacer(),
+                            Text('${filtered.length} snapshot${filtered.length == 1 ? '' : 's'}', style: const TextStyle(color: Colors.grey)),
+                          ]),
+                          const SizedBox(height: 8),
+                          Expanded(child: ListView.separated(
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemBuilder: (ctx3, i) {
+                              final path = filtered[i];
+                              final name = p.basename(path);
+                              final sel = selectedIdx == i;
+                              final integrityFlag = integrity.containsKey(path) ? integrity[path] : null;
+                              return RadioListTile<int>(
+                                value: i,
+                                groupValue: selectedIdx,
+                                onChanged: (v) async {
+                                  setState2(() => selectedIdx = v);
+                                  if (!integrity.containsKey(path)) {
+                                    setState2(() => integrity[path] = null);
+                                    final ok = await DatabaseHelper.validateArchive(path);
+                                    setState2(() => integrity[path] = ok);
+                                  }
+                                },
+                                title: Text(name, style: const TextStyle(fontFamily: 'monospace')),
+                                subtitle: Text(path, style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
+                                secondary: integrityFlag == null ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : Icon(integrityFlag ? Icons.check_circle_outline : Icons.error_outline, color: integrityFlag ? Colors.green : Colors.red),
+                              );
+                            },
+                          )),
+                        ]),
+                      ),
+
+                      const SizedBox(width: 16),
+
+                      // Right: details + actions
+                      Flexible(
+                        flex: 5,
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade200), borderRadius: BorderRadius.circular(8)),
+                          child: selectedIdx == null
+                              ? const Center(child: Text('Select a snapshot to see details and actions.'))
+                              : detailsFor(filtered[selectedIdx!]),
+                        ),
+                      ),
+                    ]),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Close')),
+              TextButton(
+                onPressed: selectedIdx == null ? null : () async {
+                  final path = filtered[selectedIdx!];
+                  final name = p.basename(path);
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (c) => AlertDialog(
+                      title: const Text('Confirm Restore'),
+                      content: Text('Restore snapshot "$name"? A pre-restore backup will be created automatically.'),
+                      actions: [TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Cancel')), TextButton(onPressed: () => Navigator.of(c).pop(true), child: const Text('Restore'))],
+                    ),
+                  );
+                  if (ok == true) {
+                    Navigator.of(ctx).pop();
+                    final restored = await DatabaseHelper.restoreFromArchivePath(path);
+                    if (restored) {
+                      _showSnack('Restored snapshot: $name');
+                      await _refreshArchiveCount();
+                      _refreshAutoStatus();
+                    } else {
+                      _showSnack('Failed to restore snapshot (integrity check failed).', isError: true);
+                    }
+                  }
+                },
+                child: const Text('Restore'),
+              ),
+              TextButton(
+                onPressed: selectedIdx == null ? null : () async {
+                  final path = filtered[selectedIdx!];
+                  final name = p.basename(path);
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (c) => AlertDialog(
+                      title: const Text('Confirm Delete'),
+                      content: Text('Permanently delete snapshot "$name"? This cannot be undone.'),
+                      actions: [TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Cancel')), TextButton(onPressed: () => Navigator.of(c).pop(true), child: const Text('Delete'))],
+                    ),
+                  );
+                  if (ok == true) {
+                    try {
+                      final f = File(path);
+                      if (await f.exists()) await f.delete();
+                      await _refreshArchiveCount();
+                      setState(() {});
+                      _showSnack('Deleted: $name');
+                    } catch (e) {
+                      _showSnack('Delete failed: $e', isError: true);
+                    }
+                  }
+                },
+                child: const Text('Delete'),
+              ),
+            ],
+          );
+        });
+      },
+    );
+  }
+
+  // Database normalization is a manual design activity (schema normalization,
+  // deduplication, and integrity constraints). The app provides integrity
+  // checks, migrations, and VACUUM/ANALYZE helpers, and automatic backups, but
+  // full normalization requires review and planned schema changes. Users may
+  // restore from snapshots before applying structural changes.
 
   void _showSnack(String msg, {bool isError = false}) {
     if (!mounted) return;
@@ -387,6 +594,18 @@ class _SettingsPageState extends State<SettingsPage> {
                           label: const Text('Open Archives Folder'),
                           onPressed: _openArchiveFolder,
                         ),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xff2F3E46),
+                            side: const BorderSide(color: Color(0xff2F3E46)),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 14),
+                          ),
+                          icon: const Icon(Icons.history_toggle_off, size: 18),
+                          label: const Text('Manage Snapshots'),
+                          onPressed: _openSnapshotsDialog,
+                        ),
+                        
                       ],
                     ),
 
@@ -590,6 +809,81 @@ class _SettingsPageState extends State<SettingsPage> {
                           )),
                         ],
                       ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+
+              // ── Recycle Bin ───────────────────────────────────────────
+              _settingsCard(
+                title: 'Recycle Bin',
+                icon: Icons.delete_outlined,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Deleted WFP Entries',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                    const SizedBox(height: 4),
+                    Text(
+                      'WFP entries and their activities moved to the bin can be '
+                      'restored or permanently deleted here.',
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xff2F3E46),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 14),
+                          ),
+                          icon: const Icon(Icons.delete_outlined, size: 18),
+                          label: Text(
+                            _recycleBinCount > 0
+                                ? 'Open Recycle Bin ($_recycleBinCount item${_recycleBinCount == 1 ? '' : 's'})'
+                                : 'Open Recycle Bin',
+                          ),
+                          onPressed: () async {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => RecycleBinPage(
+                                  appState: widget.appState,
+                                ),
+                              ),
+                            );
+                            // Refresh count when returning from the bin page
+                            _refreshRecycleBinCount();
+                          },
+                        ),
+                        if (_recycleBinCount > 0) ...[
+                          const SizedBox(width: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.red.shade200),
+                            ),
+                            child: Row(children: [
+                              Icon(Icons.info_outline,
+                                  size: 14, color: Colors.red.shade600),
+                              const SizedBox(width: 6),
+                              Text(
+                                '$_recycleBinCount deleted item${_recycleBinCount == 1 ? '' : 's'} awaiting review',
+                                style: TextStyle(
+                                    fontSize: 12, color: Colors.red.shade700),
+                              ),
+                            ]),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ),

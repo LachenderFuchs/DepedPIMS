@@ -598,6 +598,7 @@ class _ReportsPageState extends State<ReportsPage> {
                           suffixIcon: _searchQuery.isNotEmpty
                               ? IconButton(
                                   icon: const Icon(Icons.clear, size: 16),
+                                  tooltip: 'Clear search',
                                   onPressed: () {
                                     _searchCtrl.clear();
                                     setState(() { _searchQuery = ''; _currentPage = 0; });

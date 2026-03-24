@@ -131,6 +131,7 @@ class _AuditLogPageState extends State<AuditLogPage> {
                   suffixIcon: _search.isNotEmpty
                       ? IconButton(
                           icon: const Icon(Icons.clear, size: 16),
+                          tooltip: 'Clear search',
                           onPressed: () {
                             _searchCtrl.clear();
                             setState(() => _search = '');

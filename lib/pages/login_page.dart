@@ -122,6 +122,7 @@ class _LoginPageState extends State<LoginPage> {
                               ? Icons.visibility_off
                               : Icons.visibility,
                         ),
+                        tooltip: _obscurePassword ? 'Show password' : 'Hide password',
                         onPressed: () => setState(
                             () => _obscurePassword = !_obscurePassword),
                       ),

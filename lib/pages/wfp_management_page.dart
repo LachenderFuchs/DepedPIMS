@@ -147,7 +147,7 @@ class WFPManagementPageState extends State<WFPManagementPage> {
     _title.text      = entry.title;
     _targetSize.text = entry.targetSize;
     _indicator.text  = entry.indicator;
-    _amount.text     = entry.amount.toString();
+    _amount.text     = CurrencyFormatter.formatPlain(entry.amount);
     setState(() {
       _selectedYear   = entry.year;
       _fundType       = entry.fundType;
@@ -216,7 +216,7 @@ class WFPManagementPageState extends State<WFPManagementPage> {
     if (_title.text.trim().isEmpty) {
       _showSnack('Title cannot be empty.', isError: true); return;
     }
-    final parsedAmount = double.tryParse(_amount.text);
+    final parsedAmount = double.tryParse(_amount.text.replaceAll(',', ''));
     if (parsedAmount == null || parsedAmount < 0) {
       _showSnack('Please enter a valid amount.', isError: true); return;
     }
@@ -267,7 +267,7 @@ class WFPManagementPageState extends State<WFPManagementPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete WFP Entry'),
+        title: const Text('Move to Recycle Bin'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -278,23 +278,23 @@ class WFPManagementPageState extends State<WFPManagementPage> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.red.shade50,
+                  color: Colors.orange.shade50,
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: Colors.red.shade200),
+                  border: Border.all(color: Colors.orange.shade200),
                 ),
                 child: Row(children: [
-                  Icon(Icons.warning_amber_rounded, color: Colors.red.shade600, size: 18),
+                  Icon(Icons.warning_amber_rounded, color: Colors.orange.shade600, size: 18),
                   const SizedBox(width: 8),
                   Expanded(child: Text(
                     'This will also delete $activityCount linked budget '
                     '${activityCount == 1 ? 'activity' : 'activities'}. '
-                    'This cannot be undone.',
-                    style: TextStyle(color: Colors.red.shade700, fontSize: 13),
+                    'The entry will be moved to the Recycle Bin.',
+                    style: TextStyle(color: Colors.orange.shade700, fontSize: 13),
                   )),
                 ]),
               )
             else
-              Text('This entry has no linked activities.',
+              Text('This entry has no linked activities. It will be moved to the Recycle Bin.',
                 style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
           ],
         ),
@@ -302,16 +302,16 @@ class WFPManagementPageState extends State<WFPManagementPage> {
           TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade600, foregroundColor: Colors.white),
+              backgroundColor: Colors.orange.shade700, foregroundColor: Colors.white),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Delete'),
+            child: const Text('Move to Bin'),
           ),
         ],
       ),
     );
     if (confirmed == true) {
-      await widget.appState.deleteWFP(entry.id);
-      if (mounted) _showSnack('Deleted: ${entry.id}');
+      await widget.appState.softDeleteWFP(entry.id);
+      if (mounted) _showSnack('Moved to Recycle Bin: ${entry.id}');
     }
   }
 
@@ -437,7 +437,7 @@ class WFPManagementPageState extends State<WFPManagementPage> {
                           final amountField = TextField(
                             controller: _amount,
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            inputFormatters: const [DecimalTextInputFormatter()],
+                            inputFormatters: [MoneyInputFormatter(decimalRange: 2)],
                             decoration: const InputDecoration(
                                 labelText: 'Amount (₱) *', prefixText: '₱ '),
                           );

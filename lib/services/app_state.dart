@@ -17,6 +17,7 @@ class AppState extends ChangeNotifier {
   int _totalActivityCount = 0;
   int _warningDays = 7;
   int _deadlineWarningCount = 0;
+  int _recycleBinCount = 0;
   List<WFPEntry> _wfpsDueSoon = [];
   List<BudgetActivity> _activitiesDueSoon = [];
 
@@ -32,6 +33,7 @@ class AppState extends ChangeNotifier {
   int get totalActivityCount => _totalActivityCount;
   List<BudgetActivity> get allActivities => List.unmodifiable(_allActivities);
   int get deadlineWarningCount => _deadlineWarningCount;
+  int get recycleBinCount => _recycleBinCount;
   List<WFPEntry> get wfpsDueSoon => List.unmodifiable(_wfpsDueSoon);
   List<BudgetActivity> get activitiesDueSoon => List.unmodifiable(_activitiesDueSoon);
   int get warningDays => _warningDays;
@@ -51,6 +53,7 @@ class AppState extends ChangeNotifier {
       _totalActivityCount = await DatabaseHelper.countAllActivities();
       _allActivities = await DatabaseHelper.getAllActivities();
       await _refreshDeadlines();
+      _recycleBinCount = await DatabaseHelper.countRecycleBin();
       _error = null;
     } catch (e) {
       // Database unavailable — fall back to local SharedPreferences cache.
@@ -170,29 +173,70 @@ class AppState extends ChangeNotifier {
     } finally { _setLoading(false); }
   }
 
-  Future<void> deleteWFP(String id) async {
+  /// Moves a WFP into the recycle bin (soft delete). Call this instead of
+  /// the old deleteWFP everywhere — the recycle bin page handles hard deletes.
+  Future<void> softDeleteWFP(String id) async {
     _setLoading(true);
     try {
       final wfp = await DatabaseHelper.getWFPById(id);
-      await DatabaseHelper.deleteWFP(id);
-      if (wfp != null) await _logWFP('DELETE', wfp);
+      if (wfp == null) { _error = 'WFP not found: $id'; return; }
+      final acts = await DatabaseHelper.getActivitiesForWFP(id);
+      await DatabaseHelper.softDeleteWFP(wfp, acts);
+      await _logWFP('DELETE', wfp);
       _wfpEntries = await DatabaseHelper.getAllWFPs();
       _totalActivityCount = await DatabaseHelper.countAllActivities();
       _allActivities = await DatabaseHelper.getAllActivities();
       await _refreshDeadlines();
+      _recycleBinCount = await DatabaseHelper.countRecycleBin();
       if (_selectedWFP?.id == id) { _selectedWFP = null; _activities = []; }
       _error = null;
-    } catch (e) {
-      // Fallback: remove from local cache
-      try {
-        _wfpEntries.removeWhere((w) => w.id == id);
-        await _saveWFPsToPrefs();
-        if (_selectedWFP?.id == id) { _selectedWFP = null; _activities = []; }
-        _error = null;
-      } catch (err) {
-        _error = 'Failed to delete WFP entry: $e';
-      }
+    } catch (e, st) {
+      _error = 'Failed to move WFP to recycle bin: $e';
+      debugPrint('[RecycleBin] softDeleteWFP error: $e\n$st');
     } finally { _setLoading(false); }
+  }
+
+  // ─── Recycle Bin ──────────────────────────────────────────────────────────
+
+  Future<List<Map<String, dynamic>>> getRecycleBinEntries() =>
+      DatabaseHelper.getRecycleBinEntries();
+
+  /// Restores a WFP + activities from the bin back into live tables.
+  /// Returns true on success, false if the ID already exists in live data.
+  Future<bool> restoreFromBin(
+    int binId,
+    WFPEntry entry,
+    List<BudgetActivity> activities,
+  ) async {
+    _setLoading(true);
+    try {
+      final ok = await DatabaseHelper.restoreWFPFromBin(binId, entry, activities);
+      if (ok) {
+        await _logWFP('CREATE', entry);
+        _wfpEntries = await DatabaseHelper.getAllWFPs();
+        _totalActivityCount = await DatabaseHelper.countAllActivities();
+        _allActivities = await DatabaseHelper.getAllActivities();
+        await _refreshDeadlines();
+        _recycleBinCount = await DatabaseHelper.countRecycleBin();
+        _error = null;
+      }
+      return ok;
+    } catch (e) {
+      _error = 'Failed to restore entry: $e';
+      return false;
+    } finally { _setLoading(false); }
+  }
+
+  Future<void> permanentlyDeleteFromBin(int binId) async {
+    await DatabaseHelper.permanentlyDeleteFromBin(binId);
+    _recycleBinCount = await DatabaseHelper.countRecycleBin();
+    notifyListeners();
+  }
+
+  Future<void> emptyRecycleBin() async {
+    await DatabaseHelper.emptyRecycleBin();
+    _recycleBinCount = 0;
+    notifyListeners();
   }
 
   Future<int> getActivityCountForWFP(String wfpId) =>
@@ -252,19 +296,56 @@ class AppState extends ChangeNotifier {
     finally { _setLoading(false); }
   }
 
-  Future<void> deleteActivity(String id) async {
+  Future<bool> deleteActivity(String id) async {
     _setLoading(true);
     try {
       final acts = _allActivities.where((a) => a.id == id).toList();
-      await DatabaseHelper.deleteActivity(id);
-      if (acts.isNotEmpty) await _logActivity('DELETE', acts.first);
-      if (_selectedWFP != null) _activities = await DatabaseHelper.getActivitiesForWFP(_selectedWFP!.id);
+      if (acts.isEmpty) {
+        _error = 'Activity not found: $id';
+        return false;
+      }
+      final activity = acts.first;
+      await DatabaseHelper.softDeleteActivity(activity);
+      await _logActivity('DELETE', activity);
+      if (_selectedWFP != null) {
+        _activities = await DatabaseHelper.getActivitiesForWFP(_selectedWFP!.id);
+      }
       _totalActivityCount = await DatabaseHelper.countAllActivities();
       _allActivities = await DatabaseHelper.getAllActivities();
       await _refreshDeadlines();
+      _recycleBinCount = await DatabaseHelper.countRecycleBin();
       _error = null;
-    } catch (e) { _error = 'Failed to delete activity: $e'; }
-    finally { _setLoading(false); }
+      return true;
+    } catch (e) {
+      _error = 'Failed to move activity to recycle bin: $e';
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  /// Restores a single Activity from the recycle bin.
+  /// Returns true on success, false if the parent WFP is gone or ID conflicts.
+  Future<bool> restoreActivityFromBin(int binId, BudgetActivity activity) async {
+    _setLoading(true);
+    try {
+      final ok = await DatabaseHelper.restoreActivityFromBin(binId, activity);
+      if (ok) {
+        await _logActivity('CREATE', activity);
+        if (_selectedWFP?.id == activity.wfpId) {
+          _activities = await DatabaseHelper.getActivitiesForWFP(activity.wfpId);
+        }
+        _totalActivityCount = await DatabaseHelper.countAllActivities();
+        _allActivities = await DatabaseHelper.getAllActivities();
+        await _refreshDeadlines();
+        _recycleBinCount = await DatabaseHelper.countRecycleBin();
+        _error = null;
+      }
+      return ok;
+    } catch (e) {
+      _error = 'Failed to restore activity: $e';
+      return false;
+    } finally { _setLoading(false); }
   }
 
   Future<Map<String, List<BudgetActivity>>> loadActivitiesMapForExport(List<String> wfpIds) =>

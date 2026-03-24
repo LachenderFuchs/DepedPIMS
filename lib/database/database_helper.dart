@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -13,7 +14,9 @@ class DatabaseHelper {
   // Delay after the LAST write event before the backup actually fires.
   // Resets on every new write, so only one backup runs per burst of activity.
   // Default: 30 minutes. Changeable at runtime via setAutoBackupDelay().
-  static Duration _autoBackupDelay  = const Duration(minutes: 30);
+  // Default to 30 seconds on app startup as the recommended quick auto-backup
+  // behavior. This can be changed by the user in Settings during the session.
+  static Duration _autoBackupDelay  = const Duration(seconds: 30);
   static const _maxAutoBackups      = 5;
   static const _autoBackupSubdir    = 'auto';
   static Timer? _autoBackupTimer;
@@ -25,6 +28,16 @@ class DatabaseHelper {
     _autoBackupDelay = delay;
     _autoBackupTimer?.cancel();
     _autoBackupTimer = null;
+  }
+
+  /// Trigger an immediate auto-backup (useful for startup scheduling).
+  /// This runs the same logic as the debounced auto-backup routine.
+  static Future<void> triggerAutoBackupNow() async {
+    try {
+      await _runAutoBackup();
+    } catch (e, st) {
+      debugPrint('[AutoBackup] trigger failed: $e\n$st');
+    }
   }
 
   /// Read the current delay setting (for the UI).
@@ -66,7 +79,7 @@ class DatabaseHelper {
     _db = await factory.openDatabase(
       dbPath,
       options: OpenDatabaseOptions(
-        version: 5,
+        version: 7,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
       ),
@@ -169,6 +182,7 @@ class DatabaseHelper {
         indicator      TEXT NOT NULL,
         year           INTEGER NOT NULL,
         fundType       TEXT NOT NULL,
+        viewSection    TEXT NOT NULL DEFAULT 'HRD',
         amount         REAL NOT NULL,
         approvalStatus TEXT NOT NULL DEFAULT 'Pending',
         approvedDate   TEXT,
@@ -200,6 +214,18 @@ class DatabaseHelper {
         diffJson    TEXT NOT NULL
       )
     ''');
+
+    await db.execute('''
+      CREATE TABLE recycle_bin (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        entryType      TEXT NOT NULL DEFAULT 'WFP',
+        wfpJson        TEXT NOT NULL DEFAULT '',
+        activitiesJson TEXT NOT NULL DEFAULT '[]',
+        activityJson   TEXT,
+        wfpId          TEXT,
+        deletedAt      TEXT NOT NULL
+      )
+    ''');
   }
 
   /// Incremental migrations — safe to run on existing databases.
@@ -226,6 +252,27 @@ class DatabaseHelper {
           diffJson    TEXT NOT NULL
         )
       ''');
+    }
+    // v4 → v5: viewSection column on wfp (bug-fix migration — was missing)
+    if (oldVersion < 5) {
+      await _addColumnIfMissing(db, 'wfp', 'viewSection', "TEXT NOT NULL DEFAULT 'HRD'");
+    }
+    // v5 → v6: recycle_bin table
+    if (oldVersion < 6) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS recycle_bin (
+          id             INTEGER PRIMARY KEY AUTOINCREMENT,
+          wfpJson        TEXT NOT NULL DEFAULT '',
+          activitiesJson TEXT NOT NULL DEFAULT '[]',
+          deletedAt      TEXT NOT NULL
+        )
+      ''');
+    }
+    // v6 → v7: activity soft-delete support in recycle_bin
+    if (oldVersion < 7) {
+      await _addColumnIfMissing(db, 'recycle_bin', 'entryType',    "TEXT NOT NULL DEFAULT 'WFP'");
+      await _addColumnIfMissing(db, 'recycle_bin', 'activityJson', 'TEXT');
+      await _addColumnIfMissing(db, 'recycle_bin', 'wfpId',        'TEXT');
     }
   }
 
@@ -463,6 +510,140 @@ class DatabaseHelper {
     await d.delete('audit_log');
   }
 
+  // ─── Recycle Bin ───────────────────────────────────────────────────────────
+
+  /// Moves a WFP and all its activities into the recycle_bin as JSON snapshots,
+  /// then hard-deletes them from the live tables. Returns the bin row id.
+  static Future<int> softDeleteWFP(WFPEntry entry, List<BudgetActivity> activities) async {
+    final d = await db;
+    final wfpJson        = jsonEncode(entry.toMap());
+    final activitiesJson = jsonEncode(activities.map((a) => a.toMap()).toList());
+    int binId = -1;
+    await d.transaction((txn) async {
+      final pragma = await txn.rawQuery("PRAGMA table_info('recycle_bin')");
+      final columns = pragma
+          .map((row) => (row['name'] as String).toLowerCase())
+          .toSet();
+
+      final entryMap = <String, dynamic>{
+        if (columns.contains('entrytype')) 'entryType': 'WFP',
+        if (columns.contains('wfpjson')) 'wfpJson': wfpJson,
+        if (columns.contains('activitiesjson')) 'activitiesJson': activitiesJson,
+        'deletedAt': DateTime.now().toIso8601String(),
+      };
+
+      binId = await txn.insert('recycle_bin', entryMap);
+      await txn.delete('activities', where: 'wfpId = ?', whereArgs: [entry.id]);
+      await txn.delete('wfp',        where: 'id = ?',    whereArgs: [entry.id]);
+    });
+    _scheduleAutoBackup();
+    return binId;
+  }
+
+  /// Moves a single BudgetActivity into the recycle_bin, then hard-deletes it.
+  /// [parentWfpId] is stored for display context in the recycle bin UI.
+  static Future<void> softDeleteActivity(BudgetActivity activity) async {
+    final d = await db;
+    await d.transaction((txn) async {
+      // Handle old DB versions where some columns may not exist yet.
+      final pragma = await txn.rawQuery("PRAGMA table_info('recycle_bin')");
+      final columns = pragma
+          .map((row) => (row['name'] as String).toLowerCase())
+          .toSet();
+
+      final entry = <String, dynamic>{
+        if (columns.contains('entrytype')) 'entryType': 'Activity',
+        if (columns.contains('activityjson'))
+          'activityJson': jsonEncode(activity.toMap()),
+        if (columns.contains('wfpid')) 'wfpId': activity.wfpId,
+        if (columns.contains('wfpjson')) 'wfpJson': '',
+        if (columns.contains('activitiesjson')) 'activitiesJson': '[]',
+        'deletedAt': DateTime.now().toIso8601String(),
+      };
+
+      await txn.insert('recycle_bin', entry);
+      await txn.delete('activities', where: 'id = ?', whereArgs: [activity.id]);
+    });
+    _scheduleAutoBackup();
+  }
+
+  /// Returns all recycle bin entries, newest first.
+  static Future<List<Map<String, dynamic>>> getRecycleBinEntries() async {
+    final d = await db;
+    return d.query('recycle_bin', orderBy: 'id DESC');
+  }
+
+  /// Count of items currently in the recycle bin (for the sidebar badge).
+  static Future<int> countRecycleBin() async {
+    final d = await db;
+    final result = await d.rawQuery('SELECT COUNT(*) AS cnt FROM recycle_bin');
+    return (result.first['cnt'] as int?) ?? 0;
+  }
+
+  /// Restores a WFP bin entry (entryType == 'WFP') back into live tables.
+  /// Returns false if the WFP id already exists (conflict), true on success.
+  static Future<bool> restoreWFPFromBin(
+    int binId,
+    WFPEntry wfp,
+    List<BudgetActivity> activities,
+  ) async {
+    final d = await db;
+    // Guard: don't restore if id already exists in live table
+    final existing = await d.query('wfp', columns: ['id'], where: 'id = ?', whereArgs: [wfp.id]);
+    if (existing.isNotEmpty) return false;
+
+    await d.insert('wfp', wfp.toMap(), conflictAlgorithm: ConflictAlgorithm.fail);
+    for (final a in activities) {
+      await d.insert('activities', a.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await d.delete('recycle_bin', where: 'id = ?', whereArgs: [binId]);
+    _scheduleAutoBackup();
+    return true;
+  }
+
+  /// Restores a single Activity bin entry (entryType == 'Activity') back into
+  /// the activities table. Returns false if the activity id already exists OR
+  /// if the parent WFP no longer exists in the live table.
+  static Future<bool> restoreActivityFromBin(
+    int binId,
+    BudgetActivity activity,
+  ) async {
+    final d = await db;
+    // Guard: parent WFP must still exist
+    final wfpRows = await d.query('wfp', columns: ['id'],
+        where: 'id = ?', whereArgs: [activity.wfpId]);
+    if (wfpRows.isEmpty) return false;
+    // Guard: activity id must not already exist
+    final actRows = await d.query('activities', columns: ['id'],
+        where: 'id = ?', whereArgs: [activity.id]);
+    if (actRows.isNotEmpty) return false;
+
+    await d.insert('activities', activity.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.fail);
+    await d.delete('recycle_bin', where: 'id = ?', whereArgs: [binId]);
+    _scheduleAutoBackup();
+    return true;
+  }
+
+  // Keep old name as a redirect so any call sites outside AppState still compile.
+  static Future<bool> restoreFromBin(
+    int binId,
+    WFPEntry wfp,
+    List<BudgetActivity> activities,
+  ) => restoreWFPFromBin(binId, wfp, activities);
+
+  /// Permanently removes a single entry from the recycle bin.
+  static Future<void> permanentlyDeleteFromBin(int binId) async {
+    final d = await db;
+    await d.delete('recycle_bin', where: 'id = ?', whereArgs: [binId]);
+  }
+
+  /// Empties the entire recycle bin permanently.
+  static Future<void> emptyRecycleBin() async {
+    final d = await db;
+    await d.delete('recycle_bin');
+  }
+
   // ─── Auto-backup ───────────────────────────────────────────────────────────
 
   /// Debounced trigger — resets the 30-second timer on every write.
@@ -530,6 +711,131 @@ class DatabaseHelper {
     } catch (e, st) {
       lastAutoBackupFailed = true;
       debugPrint('[AutoBackup] Failed: $e\n$st');
+    }
+  }
+
+  // ─── Manual snapshot helpers ───────────────────────────────────────────
+
+  /// Returns a list of available archive db files (manual + auto), newest-first.
+  static Future<List<String>> listArchives() async {
+    final exeDir = File(Platform.resolvedExecutable).parent.path;
+    final archDir = Directory(p.join(exeDir, 'archives'));
+    final files = <File>[];
+    if (await archDir.exists()) {
+      files.addAll(await archDir
+          .list(recursive: true)
+          .where((e) => e is File && e.path.endsWith('.db'))
+          .cast<File>()
+          .toList());
+    }
+    files.sort((a, b) => b.path.compareTo(a.path));
+    return files.map((f) => f.path).toList();
+  }
+
+  /// Validate a candidate archive DB file by running SQLite's integrity_check.
+  /// Returns true only if the file exists and the integrity check returns 'ok'.
+  static Future<bool> validateArchive(String archivePath) async {
+    try {
+      sqfliteFfiInit();
+      final factory = databaseFactoryFfi;
+      return await _isDatabaseValid(archivePath, factory);
+    } catch (e) {
+      debugPrint('[DB] validateArchive failed: $e');
+      return false;
+    }
+  }
+
+  /// Close the open database connection (if any). Useful before replacing
+  /// the main DB file on disk.
+  static Future<void> closeDatabase() async {
+    try {
+      await _db?.close();
+    } catch (_) {}
+    _db = null;
+  }
+
+  /// Restore the main database from an archive file. Performs a quick
+  /// integrity check on the candidate archive before replacing the live DB.
+  /// Returns true on success.
+  static Future<bool> restoreFromArchivePath(String archivePath) async {
+    try {
+      sqfliteFfiInit();
+      final factory = databaseFactoryFfi;
+      final ok = await _isDatabaseValid(archivePath, factory);
+      if (!ok) return false;
+
+      final exeDir = File(Platform.resolvedExecutable).parent.path;
+      final dbPath = p.join(exeDir, 'pims_deped.db');
+
+      // Make a timestamped backup of current DB before overwrite
+      final src = File(dbPath);
+      if (await src.exists()) {
+        final now = DateTime.now();
+        final stamp =
+            '${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
+        final backup = p.join(exeDir, 'pims_deped_pre_restore_$stamp.db');
+        try {
+          await src.copy(backup);
+        } catch (_) {}
+      }
+
+      // Close DB, overwrite, and reset internal handle so next db getter reopens
+      await closeDatabase();
+      final archFile = File(archivePath);
+      if (!await archFile.exists()) return false;
+      final destFile = File(dbPath);
+      if (await destFile.exists()) await destFile.delete();
+      await archFile.copy(dbPath);
+      _db = null;
+      return true;
+    } catch (e) {
+      debugPrint('[DB] restoreFromArchivePath failed: $e');
+      return false;
+    }
+  }
+
+  /// Run maintenance and normalization tasks on the live database.
+  /// Returns true on success. Performs an integrity check, PRAGMA optimize,
+  /// VACUUM, and ANALYZE. Use sparingly as VACUUM can be expensive.
+  static Future<bool> normalizeDatabase() async {
+    try {
+      final d = await db;
+
+      // Quick integrity check first
+      try {
+        final rows = await d.rawQuery('PRAGMA integrity_check');
+        final result = rows.isNotEmpty ? rows.first.values.first as String? : null;
+        if (result != 'ok') {
+          debugPrint('[DB] integrity_check failed: $result');
+          return false;
+        }
+      } catch (e) {
+        debugPrint('[DB] integrity_check error: $e');
+        return false;
+      }
+
+      // Try PRAGMA optimize (no-op on older SQLite but safe)
+      try {
+        await d.execute('PRAGMA optimize');
+      } catch (_) {}
+
+      // VACUUM to rebuild the database file and reclaim space
+      try {
+        await d.execute('VACUUM');
+      } catch (e) {
+        debugPrint('[DB] VACUUM failed: $e');
+        // Not fatal — continue
+      }
+
+      // ANALYZE to update sqlite statistics
+      try {
+        await d.execute('ANALYZE');
+      } catch (_) {}
+
+      return true;
+    } catch (e) {
+      debugPrint('[DB] normalizeDatabase error: $e');
+      return false;
     }
   }
 
