@@ -395,11 +395,14 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
         ]),
         actions: [
           if (!_loading && _entries.isNotEmpty)
-            TextButton.icon(
-              style: TextButton.styleFrom(foregroundColor: Colors.red.shade600),
-              icon: const Icon(Icons.delete_sweep_outlined, size: 16),
-              label: const Text('Empty Bin'),
-              onPressed: _emptyBin,
+            Tooltip(
+              message: 'Empty the recycle bin (permanently delete all items)',
+              child: TextButton.icon(
+                style: TextButton.styleFrom(foregroundColor: Colors.red.shade600),
+                icon: const Icon(Icons.delete_sweep_outlined, size: 16),
+                label: const Text('Empty Bin'),
+                onPressed: _emptyBin,
+              ),
             ),
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -471,7 +474,7 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
                 ),
               ),
             ),
-            if (_allFundTypes.length > 1) ...[
+              if (_allFundTypes.length > 1) ...[
               const SizedBox(width: 10),
               _filterDropdown<String?>(
                 value: _filterFundType,
@@ -484,7 +487,7 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
                 onChanged: (v) => setState(() { _filterFundType = v; _page = 0; }),
               ),
             ],
-            if (_allSections.length > 1) ...[
+              if (_allSections.length > 1) ...[
               const SizedBox(width: 10),
               _filterDropdown<String?>(
                 value: _filterSection,
@@ -536,13 +539,16 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
         color: Colors.white,
       ),
       child: DropdownButtonHideUnderline(
-        child: DropdownButton<T>(
-          value: value,
-          hint: Text(hint, style: const TextStyle(fontSize: 13)),
-          isDense: true,
-          style: const TextStyle(fontSize: 13, color: Colors.black87),
-          items: items,
-          onChanged: onChanged,
+        child: Tooltip(
+          message: 'Filter: $hint',
+          child: DropdownButton<T>(
+            value: value,
+            hint: Text(hint, style: const TextStyle(fontSize: 13)),
+            isDense: true,
+            style: const TextStyle(fontSize: 13, color: Colors.black87),
+            items: items,
+            onChanged: onChanged,
+          ),
         ),
       ),
     );
@@ -550,34 +556,37 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
 
   Widget _sortChip(String label, _SortField field) {
     final active = _sortField == field;
-    return GestureDetector(
-      onTap: () => _setSort(field),
-      child: Container(
-        margin: const EdgeInsets.only(right: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: active ? const Color(0xff2F3E46) : Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: active ? const Color(0xff2F3E46) : Colors.grey.shade300),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: active ? Colors.white : Colors.grey.shade600,
-              )),
-            if (active) ...[
-              const SizedBox(width: 4),
-              Icon(
-                _sortAsc ? Icons.arrow_upward : Icons.arrow_downward,
-                size: 11, color: Colors.white,
-              ),
+    return Tooltip(
+      message: 'Sort by $label',
+      child: GestureDetector(
+        onTap: () => _setSort(field),
+        child: Container(
+          margin: const EdgeInsets.only(right: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: active ? const Color(0xff2F3E46) : Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: active ? const Color(0xff2F3E46) : Colors.grey.shade300),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: active ? Colors.white : Colors.grey.shade600,
+                )),
+              if (active) ...[
+                const SizedBox(width: 4),
+                Icon(
+                  _sortAsc ? Icons.arrow_upward : Icons.arrow_downward,
+                  size: 11, color: Colors.white,
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

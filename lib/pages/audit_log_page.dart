@@ -97,12 +97,15 @@ class _AuditLogPageState extends State<AuditLogPage> {
               Text('${filtered.length} of ${_entries.length} entries',
                 style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
               const SizedBox(width: 16),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(foregroundColor: Colors.red.shade600,
-                  side: BorderSide(color: Colors.red.shade300)),
-                icon: const Icon(Icons.delete_sweep_outlined, size: 16),
-                label: const Text('Clear Log'),
-                onPressed: _confirmClear,
+              Tooltip(
+                message: 'Clear audit log',
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(foregroundColor: Colors.red.shade600,
+                    side: BorderSide(color: Colors.red.shade300)),
+                  icon: const Icon(Icons.delete_sweep_outlined, size: 16),
+                  label: const Text('Clear Log'),
+                  onPressed: _confirmClear,
+                ),
               ),
               const SizedBox(width: 8),
               IconButton(

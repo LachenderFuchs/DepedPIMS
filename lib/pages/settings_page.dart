@@ -1071,20 +1071,23 @@ class _SettingsPageState extends State<SettingsPage> {
                             final label = d.inSeconds == 30
                                 ? '30 seconds'
                                 : '1 hour';
-                            return ChoiceChip(
-                              label: Text(label),
-                              selected: selected,
-                              selectedColor: const Color(0xff2F3E46),
-                              labelStyle: TextStyle(
-                                color: selected
-                                    ? Colors.white
-                                    : const Color(0xff2F3E46),
-                                fontWeight: FontWeight.w600,
+                            return Hint(
+                              message: 'Set auto-backup delay to $label',
+                              child: ChoiceChip(
+                                label: Text(label),
+                                selected: selected,
+                                selectedColor: const Color(0xff2F3E46),
+                                labelStyle: TextStyle(
+                                  color: selected
+                                      ? Colors.white
+                                      : const Color(0xff2F3E46),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                onSelected: (_) {
+                                  DatabaseHelper.setAutoBackupDelay(d);
+                                  setState(() {});
+                                },
                               ),
-                              onSelected: (_) {
-                                DatabaseHelper.setAutoBackupDelay(d);
-                                setState(() {});
-                              },
                             );
                           }).toList(),
                     ),

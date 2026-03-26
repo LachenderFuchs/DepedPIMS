@@ -102,6 +102,7 @@ class _LoginPageState extends State<LoginPage> {
                     controller: _username,
                     decoration: const InputDecoration(
                       labelText: 'Username',
+                      hintText: 'e.g. j.smith',
                       prefixIcon: Icon(Icons.person_outline),
                     ),
                     onSubmitted: (_) => _login(),
@@ -115,6 +116,7 @@ class _LoginPageState extends State<LoginPage> {
                     obscureText: _obscurePassword,
                     decoration: InputDecoration(
                       labelText: 'Password',
+                      hintText: 'Enter your password',
                       prefixIcon: const Icon(Icons.lock_outline),
                       suffixIcon: IconButton(
                         icon: Icon(
@@ -133,9 +135,11 @@ class _LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 28),
 
                   // Login button
-                  SizedBox(
-                    height: 46,
-                    child: ElevatedButton(
+                  Tooltip(
+                    message: 'Login',
+                    child: SizedBox(
+                      height: 46,
+                      child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xff2F3E46),
                         foregroundColor: Colors.white,
@@ -147,6 +151,7 @@ class _LoginPageState extends State<LoginPage> {
                       child: const Text(
                         'Login',
                         style: TextStyle(fontSize: 16),
+                        ),
                       ),
                     ),
                   ),

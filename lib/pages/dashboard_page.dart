@@ -75,10 +75,12 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   bool get _currentPageDirty {
-    if (_pageIndex == 1)
+    if (_pageIndex == 1) {
       return _wfpKey.currentState?.hasUnsavedChanges ?? false;
-    if (_pageIndex == 2)
+    }
+    if (_pageIndex == 2) {
       return _budgetKey.currentState?.hasUnsavedChanges ?? false;
+    }
     return false;
   }
 
@@ -257,11 +259,9 @@ class _DashboardHomeState extends State<_DashboardHome> {
           0,
           (s, a) => s + a.balance,
         );
-        final totalityBalance = totalBudget - totalDisbursed;
-        // ignore: unused_local_variable
-        final totalBalance = _balanceTotality
-            ? totalityBalance
-            : activityBalance;
+          final totalityBalance = totalBudget - totalDisbursed;
+          // ignore: unused_local_variable
+          final totalBalance = _balanceTotality ? totalityBalance : activityBalance;
 
         return LayoutBuilder(
           builder: (context, constraints) {
@@ -558,33 +558,36 @@ class _FYSelector extends StatelessWidget {
           const SizedBox(width: 6),
           Text('Fiscal Year', style: TextStyle(fontSize: 12, color: _muted)),
           const SizedBox(width: 8),
-          DropdownButton<int?>(
-            value: selected,
-            isDense: true,
-            underline: const SizedBox(),
-            style: const TextStyle(
-              fontSize: 12,
-              color: _primary,
-              fontWeight: FontWeight.w600,
-            ),
-            icon: Icon(
-              Icons.keyboard_arrow_down_rounded,
-              size: 16,
-              color: _muted,
-            ),
-            items: [
-              const DropdownMenuItem<int?>(
-                value: null,
-                child: Text('All Years'),
+          Tooltip(
+            message: 'Filter by fiscal year',
+            child: DropdownButton<int?>(
+              value: selected,
+              isDense: true,
+              underline: const SizedBox(),
+              style: TextStyle(
+                fontSize: 12,
+                color: _primary,
+                fontWeight: FontWeight.w600,
               ),
-              ...fyStarts.map(
-                (y) => DropdownMenuItem<int?>(
-                  value: y,
-                  child: Text('FY $y–${y + 1}'),
+              icon: Icon(
+                Icons.keyboard_arrow_down_rounded,
+                size: 16,
+                color: _muted,
+              ),
+              items: [
+                const DropdownMenuItem<int?>(
+                  value: null,
+                  child: Text('All Years'),
                 ),
-              ),
-            ],
-            onChanged: onChanged,
+                ...fyStarts.map(
+                  (y) => DropdownMenuItem<int?>(
+                    value: y,
+                    child: Text('FY $y–${y + 1}'),
+                  ),
+                ),
+              ],
+              onChanged: onChanged,
+            ),
           ),
           if (selected != null) ...[
             const SizedBox(width: 8),
@@ -618,73 +621,74 @@ class _WFPMiniList extends StatelessWidget {
   Widget build(BuildContext context) {
     if (entries.isEmpty) return _emptyMiniList('No WFP entries yet.');
     return _MiniListCard(
-      children: entries
-          .map(
-            (e) => InkWell(
-              onTap: () => onNavigate(1),
-              hoverColor: _mutedBg,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 108,
-                      child: Text(
-                        e.id,
-                        style: const TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 10,
-                          color: _accent,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        overflow: TextOverflow.ellipsis,
+      children: entries.map<Widget>((e) {
+        return Tooltip(
+          message: 'Open WFP Management',
+          child: InkWell(
+            onTap: () => onNavigate(1),
+            hoverColor: _mutedBg,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 10,
+              ),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 108,
+                    child: Text(
+                      e.id,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 10,
+                        color: _accent,
+                        fontWeight: FontWeight.w600,
                       ),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    Expanded(
-                      child: Text(
-                        e.title,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: _ink,
-                        ),
-                        overflow: TextOverflow.ellipsis,
+                  ),
+                  Expanded(
+                    child: Text(
+                      e.title,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: _ink,
                       ),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(width: 8),
-                    _Tag(e.fundType, bg: _mutedBg, fg: _primary),
-                    const SizedBox(width: 8),
-                    SizedBox(
-                      width: 100,
-                      child: Text(
-                        CurrencyFormatter.format(e.amount),
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: _ink,
-                        ),
-                        textAlign: TextAlign.right,
-                        overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(width: 8),
+                  _Tag(e.fundType, bg: _mutedBg, fg: _primary),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 100,
+                    child: Text(
+                      CurrencyFormatter.format(e.amount),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: _ink,
                       ),
+                      textAlign: TextAlign.right,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(width: 8),
-                    SizedBox(
-                      width: 36,
-                      child: Text(
-                        e.year.toString(),
-                        style: const TextStyle(fontSize: 11, color: _muted),
-                        textAlign: TextAlign.right,
-                      ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 36,
+                    child: Text(
+                      e.year.toString(),
+                      style: const TextStyle(fontSize: 11, color: _muted),
+                      textAlign: TextAlign.right,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-          )
-          .toList(),
+          ),
+        );
+      }).toList(),
     );
   }
 }
@@ -885,10 +889,12 @@ class _BudgetVsDisbursedChartState extends State<_BudgetVsDisbursedChart> {
   int? _hoveredIndex;
 
   String _compact(double v) {
-    if (v >= 1000000)
+    if (v >= 1000000) {
       return '${CurrencyFormatter.symbol}${(v / 1000000).toStringAsFixed(1)}M';
-    if (v >= 1000)
+    }
+    if (v >= 1000) {
       return '${CurrencyFormatter.symbol}${(v / 1000).toStringAsFixed(0)}K';
+    }
     return '${CurrencyFormatter.symbol}${v.toStringAsFixed(0)}';
   }
 
@@ -1743,24 +1749,27 @@ class _DeadlineBanner extends StatelessWidget {
                     ],
                   ),
                 ),
-                TextButton.icon(
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFFE65100),
-                    backgroundColor: const Color(0xFFFFE0B2),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                Tooltip(
+                  message: 'View all deadlines',
+                  child: TextButton.icon(
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFFE65100),
+                      backgroundColor: const Color(0xFFFFE0B2),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
                     ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 8,
+                    icon: const Icon(Icons.open_in_new_rounded, size: 14),
+                    label: const Text(
+                      'View All',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                     ),
+                    onPressed: () => onNavigate(4),
                   ),
-                  icon: const Icon(Icons.open_in_new_rounded, size: 14),
-                  label: const Text(
-                    'View All',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                  ),
-                  onPressed: () => onNavigate(4),
                 ),
               ],
             ),
@@ -1917,64 +1926,67 @@ class _PanelCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: _card,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        hoverColor: _mutedBg,
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: _border),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          padding: const EdgeInsets.all(22),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
+    return Tooltip(
+      message: 'Open $title',
+      child: Material(
+        color: _card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          hoverColor: _mutedBg,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _border),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
                 ),
-                child: Icon(icon, color: color, size: 24),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: _ink,
+              ],
+            ),
+            padding: const EdgeInsets.all(22),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: color, size: 24),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: _ink,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(color: _muted, fontSize: 12),
-                    ),
-                  ],
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle,
+                        style: const TextStyle(color: _muted, fontSize: 12),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              Icon(
-                Icons.arrow_forward_ios_rounded,
-                size: 13,
-                color: _muted.withValues(alpha: 0.7),
-              ),
-            ],
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 13,
+                  color: _muted.withValues(alpha: 0.7),
+                ),
+              ],
+            ),
           ),
         ),
       ),

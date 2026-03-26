@@ -429,31 +429,37 @@ class _ReportsPageState extends State<ReportsPage> {
             ],
           )),
           // PDF button
-          if (onPdfTap != null) ...[
-            TextButton.icon(
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.red.shade700,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          if (onPdfTap != null) ...[ 
+            Tooltip(
+              message: 'Export $label as PDF',
+              child: TextButton.icon(
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.red.shade700,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                icon: const Icon(Icons.picture_as_pdf_outlined, size: 14),
+                label: const Text('PDF', style: TextStyle(fontSize: 11)),
+                onPressed: onPdfTap,
               ),
-              icon: const Icon(Icons.picture_as_pdf_outlined, size: 14),
-              label: const Text('PDF', style: TextStyle(fontSize: 11)),
-              onPressed: onPdfTap,
             ),
             const SizedBox(width: 4),
           ],
           // Excel button
-          TextButton.icon(
-            style: TextButton.styleFrom(
-              foregroundColor: const Color(0xff2F3E46),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          Tooltip(
+            message: 'Export $label to Excel',
+            child: TextButton.icon(
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xff2F3E46),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              icon: const Icon(Icons.download_outlined, size: 14),
+              label: const Text('Excel', style: TextStyle(fontSize: 11)),
+              onPressed: onTap,
             ),
-            icon: const Icon(Icons.download_outlined, size: 14),
-            label: const Text('Excel', style: TextStyle(fontSize: 11)),
-            onPressed: onTap,
           ),
         ]),
       ),
@@ -650,50 +656,53 @@ class _ReportsPageState extends State<ReportsPage> {
                         children: _SortField.values.map((field) {
                           final active = _sortField == field;
                           return GestureDetector(
-                            onTap: () => _setSortField(field),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 150),
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: active
-                                    ? const Color(0xff2F3E46)
-                                    : Colors.grey.shade100,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: active
-                                      ? const Color(0xff2F3E46)
-                                      : Colors.grey.shade300,
+                                onTap: () => _setSortField(field),
+                                child: Tooltip(
+                                  message: 'Sort by ${field.label}',
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 150),
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                    decoration: BoxDecoration(
+                                      color: active
+                                          ? const Color(0xff2F3E46)
+                                          : Colors.grey.shade100,
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                        color: active
+                                            ? const Color(0xff2F3E46)
+                                            : Colors.grey.shade300,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          field.icon,
+                                          size: 12,
+                                          color: active ? Colors.white : const Color(0xff2F3E46),
+                                        ),
+                                        const SizedBox(width: 5),
+                                        Text(
+                                          field.label,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: active ? Colors.white : const Color(0xff2F3E46),
+                                            fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+                                          ),
+                                        ),
+                                        if (active) ...[
+                                          const SizedBox(width: 4),
+                                          Icon(
+                                            _sortAscending ? Icons.arrow_upward : Icons.arrow_downward,
+                                            size: 10,
+                                            color: Colors.white,
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
                                 ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    field.icon,
-                                    size: 12,
-                                    color: active ? Colors.white : const Color(0xff2F3E46),
-                                  ),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    field.label,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: active ? Colors.white : const Color(0xff2F3E46),
-                                      fontWeight: active ? FontWeight.w600 : FontWeight.normal,
-                                    ),
-                                  ),
-                                  if (active) ...[
-                                    const SizedBox(width: 4),
-                                    Icon(
-                                      _sortAscending ? Icons.arrow_upward : Icons.arrow_downward,
-                                      size: 10,
-                                      color: Colors.white,
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          );
+                              );
                         }).toList(),
                       ),
                       const SizedBox(height: 10),
@@ -765,16 +774,16 @@ class _ReportsPageState extends State<ReportsPage> {
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
                           icon: _groupedExporting
-                              ? const SizedBox(width: 16, height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2,
-                                    color: Color(0xff2F3E46)))
-                              : const Icon(Icons.table_chart_outlined, size: 18),
-                          label: Text(
-                            _groupedExporting
-                                ? 'Exporting…'
-                                : 'Export ${filteredList.length} entries (grouped)',
-                          ),
-                          onPressed: _groupedExporting ? null : _showGroupedExportDialogV2,
+                                            ? const SizedBox(width: 16, height: 16,
+                                                child: CircularProgressIndicator(strokeWidth: 2,
+                                                  color: Color(0xff2F3E46)))
+                                            : const Icon(Icons.table_chart_outlined, size: 18),
+                                        label: Text(
+                                          _groupedExporting
+                                              ? 'Exporting…'
+                                              : 'Export ${filteredList.length} entries (grouped)',
+                                        ),
+                                        onPressed: _groupedExporting ? null : _showGroupedExportDialogV2,
                         ),
                       ),
                     ],
