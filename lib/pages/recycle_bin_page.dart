@@ -55,17 +55,32 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
   // ─── Data loading ─────────────────────────────────────────────────────────
 
   Future<void> _load() async {
-    setState(() { _loading = true; _loadError = null; });
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
     try {
       final raw = await widget.appState.getRecycleBinEntries();
       final parsed = <_BinEntry>[];
       for (final row in raw) {
         final entry = _BinEntry.tryParse(row);
-        if (entry != null) parsed.add(entry);
+        if (entry != null) {
+          parsed.add(entry);
+        }
       }
-      if (mounted) setState(() { _entries = parsed; _loading = false; });
+      if (mounted) {
+        setState(() {
+          _entries = parsed;
+          _loading = false;
+        });
+      }
     } catch (e) {
-      if (mounted) setState(() { _loadError = e.toString(); _loading = false; });
+      if (mounted) {
+        setState(() {
+          _loadError = e.toString();
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -74,39 +89,57 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
   List<_BinEntry> get _filtered {
     final q = _search.toLowerCase();
     return _entries.where((e) {
-      final matchSearch = q.isEmpty ||
+      final matchSearch =
+          q.isEmpty ||
           e.displayId.toLowerCase().contains(q) ||
           e.displayTitle.toLowerCase().contains(q) ||
           e.displayFundType.toLowerCase().contains(q) ||
-          (e.isWFP ? (e.wfp?.viewSection ?? '').toLowerCase().contains(q) : false) ||
-          (e.isActivity ? (e.parentWfpId ?? '').toLowerCase().contains(q) : false) ||
+          (e.isWFP
+              ? (e.wfp?.viewSection ?? '').toLowerCase().contains(q)
+              : false) ||
+          (e.isActivity
+              ? (e.parentWfpId ?? '').toLowerCase().contains(q)
+              : false) ||
           e.displayYear.toString().contains(q);
-      final matchFund = _filterFundType == null ||
+      final matchFund =
+          _filterFundType == null ||
           (e.isWFP && e.wfp?.fundType == _filterFundType) ||
           e.isActivity;
-      final matchSection = _filterSection == null ||
+      final matchSection =
+          _filterSection == null ||
           (e.isWFP && e.wfp?.viewSection == _filterSection) ||
           e.isActivity;
       return matchSearch && matchFund && matchSection;
-    }).toList()
-      ..sort(_compare);
+    }).toList()..sort(_compare);
   }
 
   int _compare(_BinEntry a, _BinEntry b) {
     int cmp;
     switch (_sortField) {
-      case _SortField.deletedAt:     cmp = a.deletedAt.compareTo(b.deletedAt); break;
-      case _SortField.title:         cmp = a.displayTitle.compareTo(b.displayTitle); break;
-      case _SortField.year:          cmp = a.displayYear.compareTo(b.displayYear); break;
-      case _SortField.amount:        cmp = a.displayAmount.compareTo(b.displayAmount); break;
-      case _SortField.fundType:      cmp = a.displayFundType.compareTo(b.displayFundType); break;
-      case _SortField.activityCount: cmp = a.activities.length.compareTo(b.activities.length); break;
+      case _SortField.deletedAt:
+        cmp = a.deletedAt.compareTo(b.deletedAt);
+        break;
+      case _SortField.title:
+        cmp = a.displayTitle.compareTo(b.displayTitle);
+        break;
+      case _SortField.year:
+        cmp = a.displayYear.compareTo(b.displayYear);
+        break;
+      case _SortField.amount:
+        cmp = a.displayAmount.compareTo(b.displayAmount);
+        break;
+      case _SortField.fundType:
+        cmp = a.displayFundType.compareTo(b.displayFundType);
+        break;
+      case _SortField.activityCount:
+        cmp = a.activities.length.compareTo(b.activities.length);
+        break;
     }
     return _sortAsc ? cmp : -cmp;
   }
 
   List<_BinEntry> get _paged {
-    final all   = _filtered;
+    final all = _filtered;
     final start = _page * _rowsPerPage;
     if (start >= all.length) return [];
     return all.sublist(start, (start + _rowsPerPage).clamp(0, all.length));
@@ -118,20 +151,24 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
   }
 
   List<String> get _allFundTypes {
-    final s = _entries
-        .where((e) => e.isWFP && e.wfp != null)
-        .map((e) => e.wfp!.fundType)
-        .toSet()
-        .toList()..sort();
+    final s =
+        _entries
+            .where((e) => e.isWFP && e.wfp != null)
+            .map((e) => e.wfp!.fundType)
+            .toSet()
+            .toList()
+          ..sort();
     return s;
   }
 
   List<String> get _allSections {
-    final s = _entries
-        .where((e) => e.isWFP && e.wfp != null)
-        .map((e) => e.wfp!.viewSection)
-        .toSet()
-        .toList()..sort();
+    final s =
+        _entries
+            .where((e) => e.isWFP && e.wfp != null)
+            .map((e) => e.wfp!.viewSection)
+            .toSet()
+            .toList()
+          ..sort();
     return s;
   }
 
@@ -146,7 +183,7 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
   }
 
   Future<void> _restoreWFP(_BinEntry entry) async {
-    final wfp      = entry.wfp!;
+    final wfp = entry.wfp!;
     final actCount = entry.activities.length;
     final confirmed = await _showConfirm(
       title: 'Restore WFP Entry',
@@ -156,15 +193,17 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Restore "${wfp.title}"?',
-              style: const TextStyle(fontWeight: FontWeight.w600)),
+          Text(
+            'Restore "${wfp.title}"?',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 10),
           _infoBox(
             color: const Color(0xff3A7CA5),
             icon: Icons.info_outline,
             text: actCount > 0
                 ? 'This will also restore $actCount linked budget '
-                  '${actCount == 1 ? 'activity' : 'activities'}.'
+                      '${actCount == 1 ? 'activity' : 'activities'}.'
                 : 'This entry has no linked activities.',
           ),
         ],
@@ -175,7 +214,10 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
     if (confirmed != true) return;
 
     final ok = await widget.appState.restoreFromBin(
-        entry.binId, wfp, entry.activities);
+      entry.binId,
+      wfp,
+      entry.activities,
+    );
     if (!mounted) return;
     if (ok) {
       _showSnack('Restored: ${wfp.id}', isSuccess: true);
@@ -199,8 +241,10 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Restore "${act.name}"?',
-              style: const TextStyle(fontWeight: FontWeight.w600)),
+          Text(
+            'Restore "${act.name}"?',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 10),
           _infoBox(
             color: const Color(0xff3A7CA5),
@@ -238,8 +282,10 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Permanently delete "${entry.displayTitle}"?',
-              style: const TextStyle(fontWeight: FontWeight.w600)),
+          Text(
+            'Permanently delete "${entry.displayTitle}"?',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 10),
           _infoBox(
             color: Colors.red.shade600,
@@ -288,7 +334,10 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
     );
     if (confirmed != true) return;
     await widget.appState.emptyRecycleBin();
-    if (mounted) { _showSnack('Recycle bin emptied.'); _load(); }
+    if (mounted) {
+      _showSnack('Recycle bin emptied.');
+      _load();
+    }
   }
 
   Future<bool?> _showConfirm({
@@ -303,11 +352,13 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: Row(children: [
-          Icon(icon, color: iconColor, size: 20),
-          const SizedBox(width: 8),
-          Text(title, style: const TextStyle(fontSize: 16)),
-        ]),
+        title: Row(
+          children: [
+            Icon(icon, color: iconColor, size: 20),
+            const SizedBox(width: 8),
+            Text(title, style: const TextStyle(fontSize: 16)),
+          ],
+        ),
         content: body,
         actions: [
           TextButton(
@@ -319,7 +370,8 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
               backgroundColor: confirmColor,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(confirmLabel),
@@ -331,14 +383,16 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
 
   void _showSnack(String msg, {bool isError = false, bool isSuccess = false}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: isError
-          ? Colors.red.shade600
-          : isSuccess
-              ? Colors.green.shade600
-              : const Color(0xff2F3E46),
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: isError
+            ? Colors.red.shade600
+            : isSuccess
+            ? Colors.green.shade600
+            : const Color(0xff2F3E46),
+      ),
+    );
   }
 
   void _setSort(_SortField field) {
@@ -358,10 +412,13 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
   @override
   Widget build(BuildContext context) {
     final filtered = _filtered;
-    final total    = filtered.length;
-    final start    = total == 0 ? 0 : _page * _rowsPerPage + 1;
-    final end      = ((_page + 1) * _rowsPerPage).clamp(0, total);
-    final paged    = _paged;
+    final total = filtered.length;
+    final start = total == 0 ? 0 : _page * _rowsPerPage + 1;
+    final end = ((_page + 1) * _rowsPerPage).clamp(0, total);
+    final paged = _paged;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final wideAppBar = screenWidth >= 720;
+    final listPadding = screenWidth < 720 ? 16.0 : 24.0;
 
     return Scaffold(
       backgroundColor: const Color(0xffF5F7FA),
@@ -370,43 +427,39 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
         elevation: 0,
         foregroundColor: const Color(0xff2F3E46),
         leading: const BackButton(),
-        title: Row(children: [
-          const Text('Recycle Bin',
-              style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                  color: Color(0xff2F3E46))),
-          if (_entries.isNotEmpty) ...[
-            const SizedBox(width: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: Colors.red.shade50,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.red.shade200),
-              ),
-              child: Text('${_entries.length}',
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.red.shade600)),
-            ),
-          ],
-        ]),
+        title: const Text(
+          'Recycle Bin',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+            color: Color(0xff2F3E46),
+          ),
+        ),
         actions: [
           if (!_loading && _entries.isNotEmpty)
-            Tooltip(
-              message: 'Empty the recycle bin (permanently delete all items)',
-              child: TextButton.icon(
-                style: TextButton.styleFrom(foregroundColor: Colors.red.shade600),
-                icon: const Icon(Icons.delete_sweep_outlined, size: 16),
-                label: const Text('Empty Bin'),
-                onPressed: _emptyBin,
-              ),
-            ),
+            wideAppBar
+                ? Tooltip(
+                    message: 'Permanently delete all items in the Recycle Bin',
+                    child: TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.red.shade600,
+                      ),
+                      icon: const Icon(Icons.delete_sweep_outlined, size: 16),
+                      label: const Text('Empty Bin'),
+                      onPressed: _emptyBin,
+                    ),
+                  )
+                : IconButton(
+                    icon: Icon(
+                      Icons.delete_sweep_outlined,
+                      color: Colors.red.shade600,
+                    ),
+                    tooltip: 'Permanently delete all items in the Recycle Bin',
+                    onPressed: _emptyBin,
+                  ),
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh',
+            tooltip: 'Refresh entries',
             onPressed: _load,
           ),
           const SizedBox(width: 4),
@@ -415,27 +468,32 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _loadError != null
-              ? _errorState()
-              : _entries.isEmpty
-                  ? _emptyState()
-                  : Column(
-                      children: [
-                        _buildToolbar(),
-                        _buildStatsBar(start, end, total),
-                        Expanded(
-                          child: paged.isEmpty
-                              ? _noResultsState()
-                              : ListView.separated(
-                                  padding: const EdgeInsets.fromLTRB(24, 14, 24, 14),
-                                  itemCount: paged.length,
-                                  separatorBuilder: (_, _) =>
-                                      const SizedBox(height: 10),
-                                  itemBuilder: (_, i) => _binCard(paged[i]),
-                                ),
+          ? _errorState()
+          : _entries.isEmpty
+          ? _emptyState()
+          : Column(
+              children: [
+                _buildToolbar(),
+                _buildStatsBar(start, end, total),
+                Expanded(
+                  child: paged.isEmpty
+                      ? _noResultsState()
+                      : ListView.separated(
+                          padding: EdgeInsets.fromLTRB(
+                            listPadding,
+                            14,
+                            listPadding,
+                            14,
+                          ),
+                          itemCount: paged.length,
+                          separatorBuilder: (_, _) =>
+                              const SizedBox(height: 10),
+                          itemBuilder: (_, i) => _binCard(paged[i]),
                         ),
-                        _buildPagination(total),
-                      ],
-                    ),
+                ),
+                _buildPagination(total),
+              ],
+            ),
     );
   }
 
@@ -449,76 +507,103 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Row 1: search + filters
-          Row(children: [
-            Expanded(
-              flex: 3,
-              child: SizedBox(
-                height: 40,
-                child: TextField(
-                  controller: _searchCtrl,
-                  decoration: InputDecoration(
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                    prefixIcon: const Icon(Icons.search, size: 18),
-                    hintText: 'Search by ID, title, fund type, section…',
-                    isDense: true,
-                    suffixIcon: _search.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear, size: 16),
-                            onPressed: () {
-                              _searchCtrl.clear();
-                              setState(() { _search = ''; _page = 0; });
-                            })
-                        : null,
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: SizedBox(
+                  height: 40,
+                  child: TextField(
+                    controller: _searchCtrl,
+                    decoration: InputDecoration(
+                      contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                      prefixIcon: const Icon(Icons.search, size: 18),
+                      hintText: 'Search by ID, title, fund type, section…',
+                      isDense: true,
+                      suffixIcon: _search.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, size: 16),
+                              onPressed: () {
+                                _searchCtrl.clear();
+                                setState(() {
+                                  _search = '';
+                                  _page = 0;
+                                });
+                              },
+                            )
+                          : null,
+                    ),
+                    onChanged: (v) => setState(() {
+                      _search = v;
+                      _page = 0;
+                    }),
                   ),
-                  onChanged: (v) => setState(() { _search = v; _page = 0; }),
                 ),
               ),
-            ),
               if (_allFundTypes.length > 1) ...[
-              const SizedBox(width: 10),
-              _filterDropdown<String?>(
-                value: _filterFundType,
-                hint: 'Fund Type',
-                items: [
-                  const DropdownMenuItem(value: null, child: Text('All fund types')),
-                  ..._allFundTypes.map((f) =>
-                      DropdownMenuItem(value: f, child: Text(f))),
-                ],
-                onChanged: (v) => setState(() { _filterFundType = v; _page = 0; }),
-              ),
-            ],
+                const SizedBox(width: 10),
+                _filterDropdown<String?>(
+                  value: _filterFundType,
+                  hint: 'Fund Type',
+                  items: [
+                    const DropdownMenuItem(
+                      value: null,
+                      child: Text('All fund types'),
+                    ),
+                    ..._allFundTypes.map(
+                      (f) => DropdownMenuItem(value: f, child: Text(f)),
+                    ),
+                  ],
+                  onChanged: (v) => setState(() {
+                    _filterFundType = v;
+                    _page = 0;
+                  }),
+                ),
+              ],
               if (_allSections.length > 1) ...[
-              const SizedBox(width: 10),
-              _filterDropdown<String?>(
-                value: _filterSection,
-                hint: 'Section',
-                items: [
-                  const DropdownMenuItem(value: null, child: Text('All sections')),
-                  ..._allSections.map((s) =>
-                      DropdownMenuItem(value: s, child: Text(s))),
-                ],
-                onChanged: (v) => setState(() { _filterSection = v; _page = 0; }),
-              ),
+                const SizedBox(width: 10),
+                _filterDropdown<String?>(
+                  value: _filterSection,
+                  hint: 'Section',
+                  items: [
+                    const DropdownMenuItem(
+                      value: null,
+                      child: Text('All sections'),
+                    ),
+                    ..._allSections.map(
+                      (s) => DropdownMenuItem(value: s, child: Text(s)),
+                    ),
+                  ],
+                  onChanged: (v) => setState(() {
+                    _filterSection = v;
+                    _page = 0;
+                  }),
+                ),
+              ],
             ],
-          ]),
-
+          ),
           const SizedBox(height: 10),
 
           // Row 2: sort chips
-          Row(children: [
-            Text('Sort by:',
-              style: TextStyle(
+          Row(
+            children: [
+              Text(
+                'Sort by:',
+                style: TextStyle(
                   fontSize: 12,
                   color: Colors.grey.shade600,
-                  fontWeight: FontWeight.w500)),
-            const SizedBox(width: 8),
-            _sortChip('Date Deleted', _SortField.deletedAt),
-            _sortChip('Title',        _SortField.title),
-            _sortChip('Year',         _SortField.year),
-            _sortChip('Amount',       _SortField.amount),
-            _sortChip('Fund Type',    _SortField.fundType),
-            _sortChip('Activities',   _SortField.activityCount),
-          ]),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(width: 8),
+              _sortChip('Date Deleted', _SortField.deletedAt),
+              _sortChip('Title', _SortField.title),
+              _sortChip('Year', _SortField.year),
+              _sortChip('Amount', _SortField.amount),
+              _sortChip('Fund Type', _SortField.fundType),
+              _sortChip('Activities', _SortField.activityCount),
+            ],
+          ),
         ],
       ),
     );
@@ -567,22 +652,26 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
             color: active ? const Color(0xff2F3E46) : Colors.grey.shade100,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: active ? const Color(0xff2F3E46) : Colors.grey.shade300),
+              color: active ? const Color(0xff2F3E46) : Colors.grey.shade300,
+            ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(label,
+              Text(
+                label,
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                   color: active ? Colors.white : Colors.grey.shade600,
-                )),
+                ),
+              ),
               if (active) ...[
                 const SizedBox(width: 4),
                 Icon(
                   _sortAsc ? Icons.arrow_upward : Icons.arrow_downward,
-                  size: 11, color: Colors.white,
+                  size: 11,
+                  color: Colors.white,
                 ),
               ],
             ],
@@ -595,53 +684,78 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
   // ─── Stats bar ────────────────────────────────────────────────────────────
 
   Widget _buildStatsBar(int start, int end, int total) {
-    final f           = _filtered;
-    final wfpEntries  = f.where((e) => e.isWFP).toList();
-    final actEntries  = f.where((e) => e.isActivity).toList();
-    final totalAmount = wfpEntries.fold<double>(0, (s, e) => s + (e.wfp?.amount ?? 0));
-    final totalActs   = wfpEntries.fold<int>(0, (s, e) => s + e.activities.length)
-                      + actEntries.length;
+    final f = _filtered;
+    final wfpEntries = f.where((e) => e.isWFP).toList();
+    final actEntries = f.where((e) => e.isActivity).toList();
+    final totalAmount = wfpEntries.fold<double>(
+      0,
+      (s, e) => s + (e.wfp?.amount ?? 0),
+    );
+    final totalActs =
+        wfpEntries.fold<int>(0, (s, e) => s + e.activities.length) +
+        actEntries.length;
 
     return Container(
       color: Colors.grey.shade50,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-      child: Row(children: [
-        Text('Showing $start–$end of $total item${total == 1 ? '' : 's'}',
-          style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-        const SizedBox(width: 16),
-        Icon(Icons.account_balance_wallet_outlined,
-            size: 13, color: const Color(0xff3A7CA5)),
-        const SizedBox(width: 4),
-        Text(CurrencyFormatter.format(totalAmount),
-          style: const TextStyle(
+      child: Row(
+        children: [
+          Text(
+            'Showing $start–$end of $total item${total == 1 ? '' : 's'}',
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+          ),
+          const SizedBox(width: 16),
+          Icon(
+            Icons.account_balance_wallet_outlined,
+            size: 13,
+            color: const Color(0xff3A7CA5),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            CurrencyFormatter.format(totalAmount),
+            style: const TextStyle(
               fontSize: 12,
               color: Color(0xff3A7CA5),
-              fontWeight: FontWeight.w600)),
-        const SizedBox(width: 12),
-        Icon(Icons.task_outlined, size: 13, color: Colors.grey.shade500),
-        const SizedBox(width: 4),
-        Text('$totalActs activit${totalActs == 1 ? 'y' : 'ies'}',
-          style: TextStyle(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Icon(Icons.task_outlined, size: 13, color: Colors.grey.shade500),
+          const SizedBox(width: 4),
+          Text(
+            '$totalActs activit${totalActs == 1 ? 'y' : 'ies'}',
+            style: TextStyle(
               fontSize: 12,
               color: Colors.grey.shade600,
-              fontWeight: FontWeight.w500)),
-        const Spacer(),
-        Text('Per page:',
-          style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
-        const SizedBox(width: 6),
-        DropdownButtonHideUnderline(
-          child: DropdownButton<int>(
-            value: _rowsPerPage,
-            isDense: true,
-            style: const TextStyle(fontSize: 12, color: Colors.black87),
-            items: _perPageOptions.map((n) =>
-                DropdownMenuItem(value: n, child: Text('$n'))).toList(),
-            onChanged: (v) {
-              if (v != null) setState(() { _rowsPerPage = v; _page = 0; });
-            },
+              fontWeight: FontWeight.w500,
+            ),
           ),
-        ),
-      ]),
+          const Spacer(),
+          Text(
+            'Per page:',
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+          ),
+          const SizedBox(width: 6),
+          DropdownButtonHideUnderline(
+            child: DropdownButton<int>(
+              value: _rowsPerPage,
+              isDense: true,
+              style: const TextStyle(fontSize: 12, color: Colors.black87),
+              items: _perPageOptions
+                  .map((n) => DropdownMenuItem(value: n, child: Text('$n')))
+                  .toList(),
+              onChanged: (v) {
+                if (v != null) {
+                  setState(() {
+                    _rowsPerPage = v;
+                    _page = 0;
+                  });
+                }
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -659,15 +773,17 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           IconButton(
-            icon: const Icon(Icons.first_page), iconSize: 20,
-            tooltip: 'First page',
+            icon: const Icon(Icons.first_page),
+            iconSize: 20,
+            tooltip: 'Go to first page',
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             onPressed: _page > 0 ? () => setState(() => _page = 0) : null,
           ),
           IconButton(
-            icon: const Icon(Icons.chevron_left), iconSize: 20,
-            tooltip: 'Previous page',
+            icon: const Icon(Icons.chevron_left),
+            iconSize: 20,
+            tooltip: 'Go to previous page',
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             onPressed: _page > 0 ? () => setState(() => _page--) : null,
@@ -676,8 +792,9 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
           ..._buildPageChips(totalPgs),
           const SizedBox(width: 4),
           IconButton(
-            icon: const Icon(Icons.chevron_right), iconSize: 20,
-            tooltip: 'Next page',
+            icon: const Icon(Icons.chevron_right),
+            iconSize: 20,
+            tooltip: 'Go to next page',
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             onPressed: _page < totalPgs - 1
@@ -685,8 +802,9 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
                 : null,
           ),
           IconButton(
-            icon: const Icon(Icons.last_page), iconSize: 20,
-            tooltip: 'Last page',
+            icon: const Icon(Icons.last_page),
+            iconSize: 20,
+            tooltip: 'Go to last page',
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             onPressed: _page < totalPgs - 1
@@ -699,17 +817,19 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
   }
 
   List<Widget> _buildPageChips(int totalPgs) {
-    final chips   = <Widget>[];
-    bool  gapped  = false;
+    final chips = <Widget>[];
+    bool gapped = false;
     for (int i = 0; i < totalPgs; i++) {
       final near = (i - _page).abs() <= 1;
       final edge = i == 0 || i == totalPgs - 1;
       if (!near && !edge) {
         if (!gapped) {
-          chips.add(Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Text('…',
-              style: TextStyle(color: Colors.grey.shade500))));
+          chips.add(
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Text('…', style: TextStyle(color: Colors.grey.shade500)),
+            ),
+          );
           gapped = true;
         }
         continue;
@@ -721,22 +841,24 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
           onTap: () => setState(() => _page = i),
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 2),
-            width: 32, height: 32,
+            width: 32,
+            height: 32,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: active ? const Color(0xff2F3E46) : Colors.transparent,
               borderRadius: BorderRadius.circular(6),
               border: Border.all(
-                color: active
-                    ? const Color(0xff2F3E46)
-                    : Colors.grey.shade300),
+                color: active ? const Color(0xff2F3E46) : Colors.grey.shade300,
+              ),
             ),
-            child: Text('${i + 1}',
+            child: Text(
+              '${i + 1}',
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
                 color: active ? Colors.white : Colors.grey.shade700,
-              )),
+              ),
+            ),
           ),
         ),
       );
@@ -762,10 +884,12 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
     required Widget expandedContent,
   }) {
     final isExpanded = _expandedIds.contains(entry.binId);
-    final daysAgo   = DateTime.now().difference(entry.deletedAt).inDays;
+    final daysAgo = DateTime.now().difference(entry.deletedAt).inDays;
     final daysLabel = daysAgo == 0
         ? 'Today'
-        : daysAgo == 1 ? 'Yesterday' : '$daysAgo days ago';
+        : daysAgo == 1
+        ? 'Yesterday'
+        : '$daysAgo days ago';
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
@@ -774,8 +898,11 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
-          BoxShadow(color: Colors.grey.shade100, blurRadius: 6,
-              offset: const Offset(0, 2)),
+          BoxShadow(
+            color: Colors.grey.shade100,
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
         ],
       ),
       child: Column(
@@ -784,78 +911,107 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
             borderRadius: isExpanded
                 ? const BorderRadius.vertical(top: Radius.circular(12))
                 : BorderRadius.circular(12),
-            onTap: () => setState(() => isExpanded
-                ? _expandedIds.remove(entry.binId)
-                : _expandedIds.add(entry.binId)),
+            onTap: () => setState(
+              () => isExpanded
+                  ? _expandedIds.remove(entry.binId)
+                  : _expandedIds.add(entry.binId),
+            ),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
-              child: Row(children: [
-                // Left accent bar
-                Container(
-                  width: 4, height: 52,
-                  decoration: BoxDecoration(
+              child: Row(
+                children: [
+                  // Left accent bar
+                  Container(
+                    width: 4,
+                    height: 52,
+                    decoration: BoxDecoration(
                       color: accentColor.withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(4)),
-                ),
-                const SizedBox(width: 14),
-                // Icon badge
-                Container(
-                  width: 44, height: 44,
-                  decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  // Icon badge
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
                       color: accentColor.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(10)),
-                  child: Icon(icon, color: accentColor, size: 20),
-                ),
-                const SizedBox(width: 14),
-                // Main content
-                Expanded(child: headerContent),
-                const SizedBox(width: 12),
-                // Right: timestamp + action buttons
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Row(children: [
-                      Icon(Icons.schedule, size: 11,
-                          color: Colors.grey.shade400),
-                      const SizedBox(width: 3),
-                      Text(daysLabel,
-                          style: TextStyle(fontSize: 11,
-                              color: Colors.grey.shade500)),
-                    ]),
-                    const SizedBox(height: 2),
-                    Text(_formatDateTime(entry.deletedAt),
-                        style: TextStyle(fontSize: 10,
-                            fontFamily: 'monospace',
-                            color: Colors.grey.shade400)),
-                    const SizedBox(height: 10),
-                    Row(children: [
-                      _actionBtn(
-                        label: 'Restore',
-                        icon: Icons.restore,
-                        color: const Color(0xff2F3E46),
-                        onTap: () => _restore(entry),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(icon, color: accentColor, size: 20),
+                  ),
+                  const SizedBox(width: 14),
+                  // Main content
+                  Expanded(child: headerContent),
+                  const SizedBox(width: 12),
+                  // Right: timestamp + action buttons
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.schedule,
+                            size: 11,
+                            color: Colors.grey.shade400,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            daysLabel,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 6),
-                      IconButton(
-                        icon: Icon(Icons.delete_forever,
-                            size: 18, color: Colors.red.shade300),
-                        tooltip: 'Delete Forever',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(
-                            minWidth: 28, minHeight: 28),
-                        onPressed: () => _permanentDelete(entry),
+                      const SizedBox(height: 2),
+                      Text(
+                        _formatDateTime(entry.deletedAt),
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontFamily: 'monospace',
+                          color: Colors.grey.shade400,
+                        ),
                       ),
-                    ]),
-                  ],
-                ),
-                const SizedBox(width: 4),
-                Icon(
-                  isExpanded
-                      ? Icons.keyboard_arrow_up
-                      : Icons.keyboard_arrow_down,
-                  color: Colors.grey.shade400, size: 20,
-                ),
-              ]),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          _actionBtn(
+                            label: 'Restore',
+                            icon: Icons.restore,
+                            color: const Color(0xff2F3E46),
+                            onTap: () => _restore(entry),
+                          ),
+                          const SizedBox(width: 6),
+                          IconButton(
+                            icon: Icon(
+                              Icons.delete_forever,
+                              size: 18,
+                              color: Colors.red.shade300,
+                            ),
+                            tooltip: 'Delete permanently',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 28,
+                              minHeight: 28,
+                            ),
+                            onPressed: () => _permanentDelete(entry),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    isExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    color: Colors.grey.shade400,
+                    size: 20,
+                  ),
+                ],
+              ),
             ),
           ),
           if (isExpanded)
@@ -865,7 +1021,8 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
               decoration: BoxDecoration(
                 color: Colors.grey.shade50,
                 borderRadius: const BorderRadius.vertical(
-                    bottom: Radius.circular(12)),
+                  bottom: Radius.circular(12),
+                ),
                 border: Border(top: BorderSide(color: Colors.grey.shade200)),
               ),
               child: expandedContent,
@@ -878,14 +1035,14 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
   // ── WFP bin card ──────────────────────────────────────────────────────────
 
   Widget _buildWfpBinCard(_BinEntry entry) {
-    final wfp        = entry.wfp!;
+    final wfp = entry.wfp!;
     final activities = entry.activities;
 
     final approvalColor = wfp.approvalStatus == 'Approved'
         ? Colors.green.shade600
         : wfp.approvalStatus == 'Rejected'
-            ? Colors.red.shade600
-            : Colors.orange.shade600;
+        ? Colors.red.shade600
+        : Colors.orange.shade600;
 
     return _buildCardShell(
       entry: entry,
@@ -894,30 +1051,46 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
       headerContent: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Text(wfp.id,
-                style: const TextStyle(fontFamily: 'monospace',
-                    fontSize: 10, color: Colors.grey)),
-            const SizedBox(width: 8),
-            _chip(wfp.approvalStatus, approvalColor),
-          ]),
+          Row(
+            children: [
+              Text(
+                wfp.id,
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 10,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(width: 8),
+              _chip(wfp.approvalStatus, approvalColor),
+            ],
+          ),
           const SizedBox(height: 3),
-          Text(wfp.title,
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-              overflow: TextOverflow.ellipsis),
+          Text(
+            wfp.title,
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+            overflow: TextOverflow.ellipsis,
+          ),
           const SizedBox(height: 6),
-          Wrap(spacing: 5, runSpacing: 4, children: [
-            _chip(wfp.fundType,           const Color(0xff2F3E46)),
-            _chip(wfp.viewSection,        const Color(0xff3A7CA5)),
-            _chip(wfp.year.toString(),    Colors.grey.shade600),
-            _chip(CurrencyFormatter.format(wfp.amount),
-                const Color(0xff52B788)),
-            if (activities.isNotEmpty)
+          Wrap(
+            spacing: 5,
+            runSpacing: 4,
+            children: [
+              _chip(wfp.fundType, const Color(0xff2F3E46)),
+              _chip(wfp.viewSection, const Color(0xff3A7CA5)),
+              _chip(wfp.year.toString(), Colors.grey.shade600),
               _chip(
-                '${activities.length} '
-                '${activities.length == 1 ? 'activity' : 'activities'}',
-                Colors.purple.shade400),
-          ]),
+                CurrencyFormatter.format(wfp.amount),
+                const Color(0xff52B788),
+              ),
+              if (activities.isNotEmpty)
+                _chip(
+                  '${activities.length} '
+                  '${activities.length == 1 ? 'activity' : 'activities'}',
+                  Colors.purple.shade400,
+                ),
+            ],
+          ),
         ],
       ),
       expandedContent: Column(
@@ -925,16 +1098,20 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
         children: [
           _sectionLabel('WFP Details'),
           const SizedBox(height: 10),
-          Wrap(spacing: 24, runSpacing: 10, children: [
-            _detailItem('Amount',      CurrencyFormatter.format(wfp.amount)),
-            _detailItem('Fund Type',   wfp.fundType),
-            _detailItem('Section',     wfp.viewSection),
-            _detailItem('Year',        wfp.year.toString()),
-            _detailItem('Status',      wfp.approvalStatus),
-            _detailItem('Approved',    wfp.approvedDate ?? '—'),
-            _detailItem('Due Date',    wfp.dueDate ?? '—'),
-            _detailItem('Target Size', wfp.targetSize),
-          ]),
+          Wrap(
+            spacing: 24,
+            runSpacing: 10,
+            children: [
+              _detailItem('Amount', CurrencyFormatter.format(wfp.amount)),
+              _detailItem('Fund Type', wfp.fundType),
+              _detailItem('Section', wfp.viewSection),
+              _detailItem('Year', wfp.year.toString()),
+              _detailItem('Status', wfp.approvalStatus),
+              _detailItem('Approved', wfp.approvedDate ?? '—'),
+              _detailItem('Due Date', wfp.dueDate ?? '—'),
+              _detailItem('Target Size', wfp.targetSize),
+            ],
+          ),
           const SizedBox(height: 10),
           _detailItemWide('Indicator', wfp.indicator),
           if (activities.isNotEmpty) ...[
@@ -943,13 +1120,16 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
             const SizedBox(height: 12),
             _sectionLabel(
               '${activities.length} Budget '
-              '${activities.length == 1 ? 'Activity' : 'Activities'}'),
+              '${activities.length == 1 ? 'Activity' : 'Activities'}',
+            ),
             const SizedBox(height: 8),
             ...activities.map(_activityRow),
           ] else ...[
             const SizedBox(height: 10),
-            Text('No linked budget activities.',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
+            Text(
+              'No linked budget activities.',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
+            ),
           ],
         ],
       ),
@@ -964,10 +1144,10 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
     final statusColor = act.status == 'Completed'
         ? Colors.green.shade600
         : act.status == 'Ongoing'
-            ? Colors.blue.shade600
-            : act.status == 'At Risk'
-                ? Colors.red.shade600
-                : Colors.grey.shade500;
+        ? Colors.blue.shade600
+        : act.status == 'At Risk'
+        ? Colors.red.shade600
+        : Colors.grey.shade500;
 
     return _buildCardShell(
       entry: entry,
@@ -976,27 +1156,42 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
       headerContent: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Text(act.id,
-                style: const TextStyle(fontFamily: 'monospace',
-                    fontSize: 10, color: Colors.grey)),
-            const SizedBox(width: 8),
-            _chip('Activity', const Color(0xff3A7CA5)),
-            const SizedBox(width: 4),
-            _chip(act.status, statusColor),
-          ]),
+          Row(
+            children: [
+              Text(
+                act.id,
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 10,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(width: 8),
+              _chip('Activity', const Color(0xff3A7CA5)),
+              const SizedBox(width: 4),
+              _chip(act.status, statusColor),
+            ],
+          ),
           const SizedBox(height: 3),
-          Text(act.name,
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-              overflow: TextOverflow.ellipsis),
+          Text(
+            act.name,
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+            overflow: TextOverflow.ellipsis,
+          ),
           const SizedBox(height: 6),
-          Wrap(spacing: 5, runSpacing: 4, children: [
-            _chip('WFP: ${act.wfpId}', Colors.grey.shade600),
-            _chip(CurrencyFormatter.format(act.total),
-                const Color(0xff52B788)),
-            if (act.targetDate != null)
-              _chip('Target: ${act.targetDate}', Colors.orange.shade600),
-          ]),
+          Wrap(
+            spacing: 5,
+            runSpacing: 4,
+            children: [
+              _chip('WFP: ${act.wfpId}', Colors.grey.shade600),
+              _chip(
+                CurrencyFormatter.format(act.total),
+                const Color(0xff52B788),
+              ),
+              if (act.targetDate != null)
+                _chip('Target: ${act.targetDate}', Colors.orange.shade600),
+            ],
+          ),
         ],
       ),
       expandedContent: Column(
@@ -1004,23 +1199,28 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
         children: [
           _sectionLabel('Activity Details'),
           const SizedBox(height: 10),
-          Wrap(spacing: 24, runSpacing: 10, children: [
-            _detailItem('Activity ID',  act.id),
-            _detailItem('Parent WFP',   act.wfpId),
-            _detailItem('Total AR',     CurrencyFormatter.format(act.total)),
-            _detailItem('Projected',    CurrencyFormatter.format(act.projected)),
-            _detailItem('Disbursed',    CurrencyFormatter.format(act.disbursed)),
-            _detailItem('Balance',      CurrencyFormatter.format(act.balance)),
-            _detailItem('Status',       act.status),
-            _detailItem('Target Date',  act.targetDate ?? '—'),
-          ]),
+          Wrap(
+            spacing: 24,
+            runSpacing: 10,
+            children: [
+              _detailItem('Activity ID', act.id),
+              _detailItem('Parent WFP', act.wfpId),
+              _detailItem('Total AR', CurrencyFormatter.format(act.total)),
+              _detailItem('Projected', CurrencyFormatter.format(act.projected)),
+              _detailItem('Disbursed', CurrencyFormatter.format(act.disbursed)),
+              _detailItem('Balance', CurrencyFormatter.format(act.balance)),
+              _detailItem('Status', act.status),
+              _detailItem('Target Date', act.targetDate ?? '—'),
+            ],
+          ),
           const SizedBox(height: 10),
           _detailItemWide('Name', act.name),
           const SizedBox(height: 10),
           _infoBox(
             color: const Color(0xff3A7CA5),
             icon: Icons.info_outline,
-            text: 'Restoring this activity requires its parent WFP '
+            text:
+                'Restoring this activity requires its parent WFP '
                 '(${act.wfpId}) to still exist in the live data.',
           ),
         ],
@@ -1045,15 +1245,21 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
             border: Border.all(color: color),
             borderRadius: BorderRadius.circular(6),
           ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon, size: 13, color: color),
-            const SizedBox(width: 4),
-            Text(label,
-              style: TextStyle(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 13, color: color),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: color)),
-          ]),
+                  color: color,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1063,8 +1269,8 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
     final statusColor = a.status == 'Completed'
         ? Colors.green.shade600
         : a.status == 'Ongoing'
-            ? Colors.blue.shade600
-            : Colors.grey.shade500;
+        ? Colors.blue.shade600
+        : Colors.grey.shade500;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
@@ -1074,38 +1280,62 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.grey.shade200),
       ),
-      child: Row(children: [
-        Expanded(child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(a.id,
-              style: const TextStyle(
-                  fontFamily: 'monospace', fontSize: 10, color: Colors.grey)),
-            const SizedBox(height: 2),
-            Text(a.name,
-              style: const TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.w500)),
-          ],
-        )),
-        const SizedBox(width: 12),
-        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text(CurrencyFormatter.format(a.total),
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 3),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  a.id,
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 10,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  a.name,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
             ),
-            child: Text(a.status,
-              style: TextStyle(
-                  fontSize: 10,
-                  color: statusColor,
-                  fontWeight: FontWeight.w600)),
           ),
-        ]),
-      ]),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                CurrencyFormatter.format(a.total),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  a.status,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: statusColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -1119,19 +1349,29 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
           Container(
             padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
-                color: Colors.grey.shade100, shape: BoxShape.circle),
-            child: Icon(Icons.delete_outline,
-                size: 56, color: Colors.grey.shade400),
+              color: Colors.grey.shade100,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.delete_outline,
+              size: 56,
+              color: Colors.grey.shade400,
+            ),
           ),
           const SizedBox(height: 20),
-          const Text('Recycle bin is empty',
+          const Text(
+            'Recycle bin is empty',
             style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xff2F3E46))),
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Color(0xff2F3E46),
+            ),
+          ),
           const SizedBox(height: 8),
-          Text('Deleted WFP entries will appear here.',
-            style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+          Text(
+            'Deleted WFP entries will appear here.',
+            style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+          ),
         ],
       ),
     );
@@ -1144,13 +1384,18 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
         children: [
           Icon(Icons.search_off, size: 48, color: Colors.grey.shade300),
           const SizedBox(height: 16),
-          Text('No entries match your filters.',
-            style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+          Text(
+            'No entries match your filters.',
+            style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+          ),
           const SizedBox(height: 8),
           TextButton(
             onPressed: () => setState(() {
-              _search = ''; _searchCtrl.clear();
-              _filterFundType = null; _filterSection = null; _page = 0;
+              _search = '';
+              _searchCtrl.clear();
+              _filterFundType = null;
+              _filterSection = null;
+              _page = 0;
             }),
             child: const Text('Clear filters'),
           ),
@@ -1166,12 +1411,18 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
         children: [
           Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
           const SizedBox(height: 16),
-          const Text('Failed to load recycle bin',
+          const Text(
+            'Failed to load recycle bin',
             style: TextStyle(
-                fontWeight: FontWeight.w600, color: Color(0xff2F3E46))),
+              fontWeight: FontWeight.w600,
+              color: Color(0xff2F3E46),
+            ),
+          ),
           const SizedBox(height: 6),
-          Text(_loadError ?? '',
-            style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+          Text(
+            _loadError ?? '',
+            style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+          ),
           const SizedBox(height: 16),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
@@ -1196,46 +1447,66 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
         color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Text(label,
+      child: Text(
+        label,
         style: TextStyle(
-            fontSize: 10, color: color, fontWeight: FontWeight.w600)),
+          fontSize: 10,
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     );
   }
 
-  Widget _sectionLabel(String label) => Text(label,
+  Widget _sectionLabel(String label) => Text(
+    label,
     style: TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-        color: Colors.grey.shade500,
-        letterSpacing: 0.5));
+      fontSize: 11,
+      fontWeight: FontWeight.w700,
+      color: Colors.grey.shade500,
+      letterSpacing: 0.5,
+    ),
+  );
 
   Widget _detailItem(String label, String value) {
     return SizedBox(
       width: 148,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label,
-          style: TextStyle(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
               fontSize: 10,
               color: Colors.grey.shade500,
-              fontWeight: FontWeight.w600)),
-        const SizedBox(height: 2),
-        Text(value, style: const TextStyle(fontSize: 12)),
-      ]),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(value, style: const TextStyle(fontSize: 12)),
+        ],
+      ),
     );
   }
 
   Widget _detailItemWide(String label, String value) {
-    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      SizedBox(
-        width: 80,
-        child: Text(label,
-          style: TextStyle(
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 80,
+          child: Text(
+            label,
+            style: TextStyle(
               fontSize: 10,
               color: Colors.grey.shade500,
-              fontWeight: FontWeight.w600)),
-      ),
-      Expanded(child: Text(value, style: const TextStyle(fontSize: 12))),
-    ]);
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        Expanded(child: Text(value, style: const TextStyle(fontSize: 12))),
+      ],
+    );
   }
 
   Widget _infoBox({
@@ -1250,20 +1521,23 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
-      child: Row(children: [
-        Icon(icon, size: 16, color: color),
-        const SizedBox(width: 8),
-        Expanded(child: Text(text,
-          style: TextStyle(fontSize: 12, color: color))),
-      ]),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(text, style: TextStyle(fontSize: 12, color: color)),
+          ),
+        ],
+      ),
     );
   }
 
   String _formatDateTime(DateTime dt) {
-    final y  = dt.year.toString().padLeft(4, '0');
+    final y = dt.year.toString().padLeft(4, '0');
     final mo = dt.month.toString().padLeft(2, '0');
-    final d  = dt.day.toString().padLeft(2, '0');
-    final h  = dt.hour.toString().padLeft(2, '0');
+    final d = dt.day.toString().padLeft(2, '0');
+    final h = dt.hour.toString().padLeft(2, '0');
     final mi = dt.minute.toString().padLeft(2, '0');
     return '$y-$mo-$d  $h:$mi';
   }
@@ -1274,17 +1548,17 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
 enum _BinEntryType { wfp, activity }
 
 class _BinEntry {
-  final int                  binId;
-  final _BinEntryType        type;
-  final DateTime             deletedAt;
+  final int binId;
+  final _BinEntryType type;
+  final DateTime deletedAt;
 
   // WFP-type fields
-  final WFPEntry?            wfp;
+  final WFPEntry? wfp;
   final List<BudgetActivity> activities;
 
   // Activity-type fields
-  final BudgetActivity?      activity;
-  final String?              parentWfpId;
+  final BudgetActivity? activity;
+  final String? parentWfpId;
 
   const _BinEntry._({
     required this.binId,
@@ -1296,21 +1570,18 @@ class _BinEntry {
     this.parentWfpId,
   });
 
-  bool get isWFP      => type == _BinEntryType.wfp;
+  bool get isWFP => type == _BinEntryType.wfp;
   bool get isActivity => type == _BinEntryType.activity;
 
   /// Display title used in cards and sort/search.
   String get displayTitle =>
       isWFP ? (wfp?.title ?? '') : (activity?.name ?? '');
 
-  String get displayId =>
-      isWFP ? (wfp?.id ?? '') : (activity?.id ?? '');
+  String get displayId => isWFP ? (wfp?.id ?? '') : (activity?.id ?? '');
 
-  String get displayFundType =>
-      isWFP ? (wfp?.fundType ?? '') : '';
+  String get displayFundType => isWFP ? (wfp?.fundType ?? '') : '';
 
-  int get displayYear =>
-      isWFP ? (wfp?.year ?? 0) : 0;
+  int get displayYear => isWFP ? (wfp?.year ?? 0) : 0;
 
   double get displayAmount =>
       isWFP ? (wfp?.amount ?? 0) : (activity?.total ?? 0);
@@ -1321,8 +1592,9 @@ class _BinEntry {
       final entryType = entryTypeRaw.toLowerCase() == 'activity'
           ? _BinEntryType.activity
           : _BinEntryType.wfp;
-      final deletedAt = DateTime.tryParse(row['deletedAt'] as String) ?? DateTime.now();
-      final binId     = row['id'] as int;
+      final deletedAt =
+          DateTime.tryParse(row['deletedAt'] as String) ?? DateTime.now();
+      final binId = row['id'] as int;
 
       if (entryType == _BinEntryType.activity) {
         final actJson = row['activityJson'] as String?;
@@ -1331,28 +1603,30 @@ class _BinEntry {
           return null;
         }
         final activity = BudgetActivity.fromMap(
-            jsonDecode(actJson) as Map<String, dynamic>);
+          jsonDecode(actJson) as Map<String, dynamic>,
+        );
         return _BinEntry._(
-          binId:       binId,
-          type:        _BinEntryType.activity,
-          deletedAt:   deletedAt,
-          activity:    activity,
+          binId: binId,
+          type: _BinEntryType.activity,
+          deletedAt: deletedAt,
+          activity: activity,
           parentWfpId: row['wfpId'] as String?,
         );
       } else {
         final wfpJsonStr = row['wfpJson'] as String?;
         if (wfpJsonStr == null || wfpJsonStr.isEmpty) return null;
         final wfp = WFPEntry.fromMap(
-            jsonDecode(wfpJsonStr) as Map<String, dynamic>);
+          jsonDecode(wfpJsonStr) as Map<String, dynamic>,
+        );
         final actsJson = row['activitiesJson'] as String? ?? '[]';
         final acts = (jsonDecode(actsJson) as List<dynamic>)
             .map((m) => BudgetActivity.fromMap(m as Map<String, dynamic>))
             .toList();
         return _BinEntry._(
-          binId:      binId,
-          type:       _BinEntryType.wfp,
-          deletedAt:  deletedAt,
-          wfp:        wfp,
+          binId: binId,
+          type: _BinEntryType.wfp,
+          deletedAt: deletedAt,
+          wfp: wfp,
           activities: acts,
         );
       }

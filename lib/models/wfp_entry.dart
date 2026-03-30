@@ -45,7 +45,10 @@ class WFPEntry {
     if (dueDate == null) return null;
     final due = DateTime.tryParse(dueDate!);
     if (due == null) return null;
-    return due.difference(DateTime.now()).inDays;
+    final today = DateTime.now();
+    final dueDateOnly = DateTime(due.year, due.month, due.day);
+    final todayDateOnly = DateTime(today.year, today.month, today.day);
+    return dueDateOnly.difference(todayDateOnly).inDays;
   }
 
   WFPEntry copyWith({
@@ -73,41 +76,44 @@ class WFPEntry {
       viewSection: viewSection ?? this.viewSection,
       amount: amount ?? this.amount,
       approvalStatus: approvalStatus ?? this.approvalStatus,
-      approvedDate: clearApprovedDate ? null : (approvedDate ?? this.approvedDate),
+      approvedDate: clearApprovedDate
+          ? null
+          : (approvedDate ?? this.approvedDate),
       dueDate: clearDueDate ? null : (dueDate ?? this.dueDate),
     );
   }
 
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'title': title,
-        'targetSize': targetSize,
-        'indicator': indicator,
-        'year': year,
-        'fundType': fundType,
-        'viewSection': viewSection,
-        'amount': amount,
-        'approvalStatus': approvalStatus,
-        'approvedDate': approvedDate,
-        'dueDate': dueDate,
-      };
+    'id': id,
+    'title': title,
+    'targetSize': targetSize,
+    'indicator': indicator,
+    'year': year,
+    'fundType': fundType,
+    'viewSection': viewSection,
+    'amount': amount,
+    'approvalStatus': approvalStatus,
+    'approvedDate': approvedDate,
+    'dueDate': dueDate,
+  };
 
   factory WFPEntry.fromMap(Map<String, dynamic> map) => WFPEntry(
-        id: map['id'] as String,
-        title: map['title'] as String,
-        targetSize: map['targetSize'] as String,
-        indicator: map['indicator'] as String,
-        year: map['year'] as int,
-        fundType: map['fundType'] as String,
-        viewSection: (map['viewSection'] as String?) ?? 'HRD',
-        amount: (map['amount'] as num).toDouble(),
-        approvalStatus: (map['approvalStatus'] as String?) ?? 'Pending',
-        approvedDate: map['approvedDate'] as String?,
-        dueDate: map['dueDate'] as String?,
-      );
+    id: map['id'] as String,
+    title: map['title'] as String,
+    targetSize: map['targetSize'] as String,
+    indicator: map['indicator'] as String,
+    year: map['year'] as int,
+    fundType: map['fundType'] as String,
+    viewSection: (map['viewSection'] as String?) ?? 'HRD',
+    amount: (map['amount'] as num).toDouble(),
+    approvalStatus: (map['approvalStatus'] as String?) ?? 'Pending',
+    approvedDate: map['approvedDate'] as String?,
+    dueDate: map['dueDate'] as String?,
+  );
 
   @override
-  String toString() => 'WFPEntry($id, $title, $fundType, $viewSection, $year, $approvalStatus)';
+  String toString() =>
+      'WFPEntry($id, $title, $fundType, $viewSection, $year, $approvalStatus)';
 
   @override
   bool operator ==(Object other) => other is WFPEntry && other.id == id;

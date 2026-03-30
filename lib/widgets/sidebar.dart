@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
 import '../services/app_state.dart';
+import '../theme/app_theme.dart';
+import 'brand_mark.dart';
 
 class Sidebar extends StatelessWidget {
   final Function(int) onSelect;
   final int currentIndex;
   final AppState appState;
+  final bool compact;
 
   const Sidebar({
     super.key,
     required this.onSelect,
     required this.appState,
     this.currentIndex = 0,
+    this.compact = false,
   });
 
   @override
@@ -18,36 +22,113 @@ class Sidebar extends StatelessWidget {
     return ListenableBuilder(
       listenable: appState,
       builder: (context, _) {
-        return Container(
-          width: 220,
-          color: const Color(0xff2F3E46),
-          child: Column(
-            children: [
-              const SizedBox(height: 40),
-              const Text(
-                'PIMS DepED',
-                style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+        final topSection = Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const BrandMark(image: AssetImage('assets/images/logo.png')),
+            const SizedBox(height: 16),
+            const Text(
+              'PMIS DepED',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.sidebarText,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
               ),
-              const SizedBox(height: 8),
-              Text(
-                'DepED Management System',
-                style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 10),
-                textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'DepED Management System',
+              style: TextStyle(color: AppColors.sidebarMutedText, fontSize: 10),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            _item(Icons.dashboard_outlined, 'Dashboard', 0),
+            _item(Icons.list_alt_outlined, 'WFP Management', 1),
+            _item(Icons.account_balance_wallet_outlined, 'Budget Overview', 2),
+            _item(Icons.summarize_outlined, 'Reports', 3),
+            _badgeItem(
+              Icons.schedule_outlined,
+              'Deadlines',
+              4,
+              appState.deadlineWarningCount,
+            ),
+            _item(Icons.settings_outlined, 'Settings', 5),
+            _item(Icons.history, 'Audit Log', 6),
+          ],
+        );
+
+        final bottomSection = Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (appState.hasActiveSession) ...[
+              Container(
+                margin: const EdgeInsets.fromLTRB(10, 0, 10, 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.tint(AppColors.primary, 0.18),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.sidebarText.withValues(alpha: 0.12),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      appState.currentActorName,
+                      style: const TextStyle(
+                        color: AppColors.sidebarText,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 32),
-              _item(Icons.dashboard_outlined, 'Dashboard', 0),
-              _item(Icons.list_alt_outlined, 'WFP Management', 1),
-              _item(Icons.account_balance_wallet_outlined, 'Budget Overview', 2),
-              _item(Icons.summarize_outlined, 'Reports', 3),
-              _badgeItem(Icons.schedule_outlined, 'Deadlines', 4, appState.deadlineWarningCount),
-              _item(Icons.settings_outlined, 'Settings', 5),
-              _item(Icons.history, 'Audit Log', 6),
-              const Spacer(),
-              const Divider(color: Colors.white24, height: 1),
-              const SizedBox(height: 8),
-              _item(Icons.logout, 'Log Out', 7),
-              const SizedBox(height: 24),
             ],
+            Divider(
+              color: AppColors.sidebarText.withValues(alpha: 0.12),
+              height: 1,
+            ),
+            const SizedBox(height: 8),
+            _item(Icons.logout, 'Log Out', 7),
+          ],
+        );
+
+        return Container(
+          width: compact ? null : 220,
+          color: AppColors.sidebar,
+          child: SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final verticalPadding = compact ? 12.0 : 24.0;
+                final minHeight = constraints.maxHeight.isFinite
+                    ? (constraints.maxHeight - (verticalPadding + 24)).clamp(
+                        0.0,
+                        double.infinity,
+                      )
+                    : 0.0;
+
+                return SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(10, verticalPadding, 10, 24),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: minHeight),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        topSection,
+                        const SizedBox(height: 24),
+                        bottomSection,
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
           ),
         );
       },
@@ -64,20 +145,30 @@ class Sidebar extends StatelessWidget {
     return _tile(icon, label, index, active, count > 0 ? count : null);
   }
 
-  Widget _tile(IconData icon, String label, int index, bool active, int? badge) {
+  Widget _tile(
+    IconData icon,
+    String label,
+    int index,
+    bool active,
+    int? badge,
+  ) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
       decoration: BoxDecoration(
-        color: active ? Colors.white.withValues(alpha: 0.15) : Colors.transparent,
+        color: active ? AppColors.primary : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
       ),
       child: ListTile(
         dense: true,
-        leading: Icon(icon, color: active ? Colors.white : Colors.white70, size: 20),
+        leading: Icon(
+          icon,
+          color: active ? Colors.white : AppColors.sidebarMutedText,
+          size: 20,
+        ),
         title: Text(
           label,
           style: TextStyle(
-            color: active ? Colors.white : Colors.white70,
+            color: active ? Colors.white : AppColors.sidebarText,
             fontWeight: active ? FontWeight.bold : FontWeight.normal,
             fontSize: 14,
           ),
@@ -86,12 +177,16 @@ class Sidebar extends StatelessWidget {
             ? Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
-                  color: Colors.red.shade500,
+                  color: AppColors.danger,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   badge > 99 ? '99+' : '$badge',
-                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               )
             : null,

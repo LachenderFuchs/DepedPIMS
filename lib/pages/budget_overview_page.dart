@@ -3,8 +3,27 @@ import 'package:data_table_2/data_table_2.dart';
 import '../models/budget_activity.dart';
 import '../models/wfp_entry.dart';
 import '../services/app_state.dart';
+import '../theme/app_theme.dart';
 import '../utils/currency_formatter.dart';
 import '../utils/decimal_input_formatter.dart';
+import '../utils/record_validator.dart';
+import '../widgets/pagination_bar.dart';
+
+class _TableHeaderText extends StatelessWidget {
+  final String text;
+
+  const _TableHeaderText(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      softWrap: false,
+    );
+  }
+}
 
 class BudgetOverviewPage extends StatefulWidget {
   final AppState appState;
@@ -44,6 +63,8 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
     'Completed',
     'At Risk',
   ];
+  static const double _compactChipMaxWidth = 96.0;
+  static const double _dateCellMaxWidth = 122.0;
   static const double _activityTableHeight = 420.0;
   static const double _tableMinWidth = 900.0;
 
@@ -227,6 +248,26 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
       _disbursed.text.isNotEmpty ||
       _editingActivity != null;
 
+  Future<void> openActivityById(String activityId) async {
+    final activityIndex = widget.appState.allActivities.indexWhere(
+      (item) => item.id == activityId,
+    );
+    if (activityIndex == -1) return;
+    final activity = widget.appState.allActivities[activityIndex];
+
+    final parentIndex = widget.appState.wfpEntries.indexWhere(
+      (item) => item.id == activity.wfpId,
+    );
+    if (parentIndex == -1) return;
+    final parent = widget.appState.wfpEntries[parentIndex];
+
+    _wfpSearch.text = parent.id;
+    _activitySearch.text = activity.id;
+    await _selectWFP(parent);
+    _loadActivityIntoForm(activity);
+    setState(() => _currentPage = 0);
+  }
+
   // ─── Form helpers ─────────────────────────────────────────────────────────
 
   void _loadActivityIntoForm(BudgetActivity a) {
@@ -304,31 +345,24 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
   Future<void> _submitActivity() async {
     final selectedWFP = widget.appState.selectedWFP;
     if (selectedWFP == null) return;
-    if (!selectedWFP.isApproved) {
-      _showSnack(
-        'Cannot add activities — this WFP is "${selectedWFP.approvalStatus}". Approve it first.',
-        isError: true,
-      );
-      return;
-    }
-    if (_activityName.text.trim().isEmpty) {
-      _showSnack('Activity name cannot be empty.', isError: true);
-      return;
-    }
     final totalVal = double.tryParse(_total.text.replaceAll(',', ''));
     final projectedVal = double.tryParse(_projected.text.replaceAll(',', ''));
     final disbursedVal = double.tryParse(_disbursed.text.replaceAll(',', ''));
-    if (totalVal == null || projectedVal == null || disbursedVal == null) {
-      _showSnack('Please enter valid numeric values.', isError: true);
-      return;
-    }
-    final otherTotal = widget.appState.activities
-        .where((a) => a.id != _editingActivity?.id)
-        .fold<double>(0, (s, a) => s + a.total);
-    if (otherTotal + totalVal > selectedWFP.amount) {
-      final remaining = selectedWFP.amount - otherTotal;
+    final validationError = RecordValidator.validateActivity(
+      selectedWFP: selectedWFP,
+      name: _activityName.text,
+      total: totalVal,
+      projected: projectedVal,
+      disbursed: disbursedVal,
+      targetDate: _targetDate,
+      existingActivities: widget.appState.activities,
+      editingId: _editingActivity?.id,
+    );
+    if (validationError != null) {
       _showSnack(
-        'Exceeds WFP ceiling. Remaining: ${CurrencyFormatter.format(remaining < 0 ? 0 : remaining)}',
+        selectedWFP.isApproved
+            ? validationError
+            : 'Cannot add activities — this WFP is "${selectedWFP.approvalStatus}". Approve it first.',
         isError: true,
       );
       return;
@@ -337,9 +371,9 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
       await widget.appState.updateActivity(
         _editingActivity!.copyWith(
           name: _activityName.text.trim(),
-          total: totalVal,
-          projected: projectedVal,
-          disbursed: disbursedVal,
+          total: totalVal!,
+          projected: projectedVal!,
+          disbursed: disbursedVal!,
           status: _status,
           targetDate: _targetDate,
           clearTargetDate: _targetDate == null,
@@ -353,9 +387,9 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
           id: id,
           wfpId: selectedWFP.id,
           name: _activityName.text.trim(),
-          total: totalVal,
-          projected: projectedVal,
-          disbursed: disbursedVal,
+          total: totalVal!,
+          projected: projectedVal!,
+          disbursed: disbursedVal!,
           status: _status,
           targetDate: _targetDate,
         ),
@@ -385,14 +419,25 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(color: Colors.blue.shade200),
               ),
-              child: Row(children: [
-                Icon(Icons.info_outline, color: Colors.blue.shade600, size: 16),
-                const SizedBox(width: 8),
-                Expanded(child: Text(
-                  'The activity can be restored from the Recycle Bin in Settings.',
-                  style: TextStyle(color: Colors.blue.shade700, fontSize: 12),
-                )),
-              ]),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    color: Colors.blue.shade600,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'The activity can be restored from the Recycle Bin in Settings.',
+                      style: TextStyle(
+                        color: Colors.blue.shade700,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -432,7 +477,7 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg),
-        backgroundColor: isError ? Colors.red.shade600 : Colors.green.shade600,
+        backgroundColor: isError ? AppColors.danger : AppColors.success,
         duration: const Duration(seconds: 3),
       ),
     );
@@ -441,25 +486,128 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
   Color _statusColor(String s) {
     switch (s) {
       case 'Completed':
-        return Colors.green.shade600;
+        return AppColors.success;
       case 'Ongoing':
-        return Colors.blue.shade600;
+        return AppColors.info;
       case 'At Risk':
-        return Colors.red.shade600;
+        return AppColors.danger;
       default:
-        return Colors.grey.shade600;
+        return AppColors.textSecondary;
     }
   }
 
   Color _approvalColor(String s) {
     switch (s) {
       case 'Approved':
-        return Colors.green.shade600;
+        return AppColors.success;
       case 'Rejected':
-        return Colors.red.shade600;
+        return AppColors.danger;
       default:
-        return Colors.orange.shade600;
+        return AppColors.warning;
     }
+  }
+
+  double _responsiveColumnWidth(
+    double availableWidth, {
+    required double fraction,
+    required double min,
+    required double max,
+  }) {
+    return (availableWidth * fraction).clamp(min, max).toDouble();
+  }
+
+  Widget _buildCompactChip({
+    required String text,
+    required String tooltip,
+    required Color backgroundColor,
+    Color? textColor,
+    FontWeight fontWeight = FontWeight.w600,
+    double maxWidth = _compactChipMaxWidth,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            softWrap: false,
+            style: TextStyle(
+              fontSize: 11,
+              color: textColor,
+              fontWeight: fontWeight,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDueDateCell(
+    WFPEntry entry, {
+    double maxWidth = _dateCellMaxWidth,
+  }) {
+    final daysUntil = entry.daysUntilDue;
+    if (entry.dueDate == null) {
+      return Tooltip(
+        message: 'No due date set',
+        child: Text(
+          '-',
+          style: TextStyle(
+            color: AppColors.textSecondary.withValues(alpha: 0.7),
+          ),
+        ),
+      );
+    }
+
+    final message = daysUntil == null
+        ? 'Due: ${entry.dueDate}'
+        : daysUntil < 0
+        ? 'Overdue by ${-daysUntil} day${-daysUntil == 1 ? '' : 's'}'
+        : daysUntil == 0
+        ? 'Due today!'
+        : 'Due in $daysUntil day${daysUntil == 1 ? '' : 's'} (${entry.dueDate})';
+
+    return Tooltip(
+      message: message,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (daysUntil != null && daysUntil <= 7) ...[
+              Icon(
+                Icons.warning_amber_rounded,
+                size: 13,
+                color: daysUntil < 0 ? AppColors.danger : AppColors.warning,
+              ),
+              const SizedBox(width: 4),
+            ],
+            Expanded(
+              child: Text(
+                entry.dueDate!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                softWrap: false,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: daysUntil != null && daysUntil < 0
+                      ? AppColors.danger
+                      : AppColors.textPrimary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // ─── Build ────────────────────────────────────────────────────────────────
@@ -506,7 +654,10 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                 const SizedBox(height: 4),
                 Text(
                   'Select a WFP entry below to manage its budget activities.',
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
 
                 const SizedBox(height: 20),
@@ -572,7 +723,7 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                                       size: 18,
                                     ),
                                     hintText:
-                                        'Search ID, title, fund type, year, approval…',
+                                        'ID, title, fund type, year, or approval status',
                                     hintStyle: TextStyle(
                                       fontSize: 12,
                                       color: Colors.grey.shade400,
@@ -618,6 +769,7 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                           },
                         ),
                       ),
+                      const SizedBox(height: 12),
                       SizedBox(
                         height: allWFP.isEmpty ? 100 : 320,
                         child: allWFP.isEmpty
@@ -640,353 +792,407 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                                   ),
                                 ),
                               )
-                            : DataTable2(
-                                minWidth: 900,
-                                sortColumnIndex: _wfpSortCol,
-                                sortAscending: _wfpSortAsc,
-                                headingRowColor: WidgetStateProperty.all(
-                                  const Color(0xff2F3E46),
-                                ),
-                                headingTextStyle: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                columnSpacing: 14,
-                                horizontalMargin: 12,
-                                columns: [
-                                  DataColumn2(
-                                    label: Tooltip(
-                                      message: 'Unique WFP identifier — click to sort',
-                                      child: const Text('WFP ID'),
-                                    ),
-                                    size: ColumnSize.M,
-                                    onSort: _onWFPSort,
-                                  ),
-                                  DataColumn2(
-                                    label: Tooltip(
-                                      message: 'WFP programme title — click to sort',
-                                      child: const Text('Title'),
-                                    ),
-                                    size: ColumnSize.L,
-                                    onSort: _onWFPSort,
-                                  ),
-                                  DataColumn2(
-                                    label: Tooltip(
-                                      message: 'Source of funds (e.g. GAA, RLIP) — click to sort',
-                                      child: const Text('Fund Type'),
-                                    ),
-                                    size: ColumnSize.S,
-                                    onSort: _onWFPSort,
-                                  ),
-                                  DataColumn2(
-                                    label: Tooltip(
-                                      message: 'Fiscal year this WFP covers — click to sort',
-                                      child: const Text('Year'),
-                                    ),
-                                    size: ColumnSize.S,
-                                    numeric: true,
-                                    onSort: _onWFPSort,
-                                  ),
-                                  DataColumn2(
-                                    label: Tooltip(
-                                      message: 'Total approved budget ceiling — click to sort',
-                                      child: const Text('Amount'),
-                                    ),
-                                    size: ColumnSize.M,
-                                    numeric: true,
-                                    onSort: _onWFPSort,
-                                  ),
-                                  DataColumn2(
-                                    label: Tooltip(
-                                      message:
-                                          'Current approval status (Approved / Pending / Rejected) — click to sort',
-                                      child: const Text('Approval'),
-                                    ),
-                                    size: ColumnSize.S,
-                                    onSort: _onWFPSort,
-                                  ),
-                                  DataColumn2(
-                                    label: Tooltip(
-                                      message:
-                                          'Deadline for this WFP — turns red when overdue — click to sort',
-                                      child: const Text('Due Date'),
-                                    ),
-                                    size: ColumnSize.S,
-                                    onSort: _onWFPSort,
-                                  ),
-                                  const DataColumn2(
-                                    label: Tooltip(
-                                      message:
-                                          'Select a WFP to begin adding or editing its budget activities',
-                                      child: Text('Actions'),
-                                    ),
-                                    size: ColumnSize.S,
-                                  ),
-                                ],
-                                rows: wfpEntries.asMap().entries.map((entry) {
-                                  final i = entry.key;
-                                  final e = entry.value;
-                                  final isSelected = selectedWFP?.id == e.id;
-                                  final approvalClr = _approvalColor(
-                                    e.approvalStatus,
+                            : LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final tableWidth =
+                                      constraints.maxWidth < _tableMinWidth
+                                      ? _tableMinWidth
+                                      : constraints.maxWidth;
+                                  final wfpIdWidth = _responsiveColumnWidth(
+                                    tableWidth,
+                                    fraction: 0.15,
+                                    min: 122,
+                                    max: 154,
                                   );
-                                  final daysUntil = e.daysUntilDue;
-                                  return DataRow2(
-                                    color: WidgetStateProperty.resolveWith((_) {
-                                      if (isSelected) {
-                                        return const Color(
-                                          0xff2F3E46,
-                                        ).withValues(alpha: 0.08);
-                                      }
-                                      return i.isEven
-                                          ? Colors.white
-                                          : Colors.grey.shade50;
-                                    }),
-                                    cells: [
-                                      DataCell(
-                                        Tooltip(
-                                          message: 'WFP ID: ${e.id}',
-                                          child: Text(
-                                            e.id,
-                                            style: TextStyle(
-                                              fontFamily: 'monospace',
-                                              fontSize: 12,
-                                              fontWeight: isSelected
-                                                  ? FontWeight.bold
-                                                  : FontWeight.normal,
-                                              color: isSelected
-                                                  ? const Color(0xff2F3E46)
-                                                  : null,
+                                  final fundTypeWidth = _responsiveColumnWidth(
+                                    tableWidth,
+                                    fraction: 0.11,
+                                    min: 84,
+                                    max: 114,
+                                  );
+                                  final yearWidth = _responsiveColumnWidth(
+                                    tableWidth,
+                                    fraction: 0.08,
+                                    min: 72,
+                                    max: 88,
+                                  );
+                                  final amountWidth = _responsiveColumnWidth(
+                                    tableWidth,
+                                    fraction: 0.14,
+                                    min: 118,
+                                    max: 152,
+                                  );
+                                  final approvalWidth = _responsiveColumnWidth(
+                                    tableWidth,
+                                    fraction: 0.11,
+                                    min: 96,
+                                    max: 126,
+                                  );
+                                  final dueDateWidth = _responsiveColumnWidth(
+                                    tableWidth,
+                                    fraction: 0.13,
+                                    min: 110,
+                                    max: 138,
+                                  );
+                                  final actionsWidth = _responsiveColumnWidth(
+                                    tableWidth,
+                                    fraction: 0.15,
+                                    min: 122,
+                                    max: 154,
+                                  );
+
+                                  return SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: SizedBox(
+                                      width: tableWidth,
+                                      child: DataTable2(
+                                        minWidth: _tableMinWidth,
+                                        sortColumnIndex: _wfpSortCol,
+                                        sortAscending: _wfpSortAsc,
+                                        headingRowColor:
+                                            WidgetStateProperty.all(
+                                              AppColors.primary,
                                             ),
-                                          ),
+                                        headingTextStyle: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
                                         ),
-                                      ),
-                                      DataCell(
-                                        Row(
-                                          children: [
-                                            if (isSelected)
-                                              Container(
-                                                width: 3,
-                                                height: 20,
-                                                margin: const EdgeInsets.only(
-                                                  right: 6,
+                                        columnSpacing: 14,
+                                        horizontalMargin: 12,
+                                        columns: [
+                                          DataColumn2(
+                                            label: Tooltip(
+                                              message:
+                                                  'Unique WFP identifier — click to sort',
+                                              child: const _TableHeaderText(
+                                                'WFP ID',
+                                              ),
+                                            ),
+                                            fixedWidth: wfpIdWidth,
+                                            onSort: _onWFPSort,
+                                          ),
+                                          DataColumn2(
+                                            label: Tooltip(
+                                              message:
+                                                  'WFP program title — click to sort',
+                                              child: const _TableHeaderText(
+                                                'Title',
+                                              ),
+                                            ),
+                                            size: ColumnSize.L,
+                                            onSort: _onWFPSort,
+                                          ),
+                                          DataColumn2(
+                                            label: Tooltip(
+                                              message:
+                                                  'Source of funds (e.g. GAA, RLIP) — click to sort',
+                                              child: const _TableHeaderText(
+                                                'Fund Type',
+                                              ),
+                                            ),
+                                            fixedWidth: fundTypeWidth,
+                                            onSort: _onWFPSort,
+                                          ),
+                                          DataColumn2(
+                                            label: Tooltip(
+                                              message:
+                                                  'Fiscal year this WFP covers — click to sort',
+                                              child: const _TableHeaderText(
+                                                'Year',
+                                              ),
+                                            ),
+                                            fixedWidth: yearWidth,
+                                            numeric: true,
+                                            onSort: _onWFPSort,
+                                          ),
+                                          DataColumn2(
+                                            label: Tooltip(
+                                              message:
+                                                  'Total approved budget ceiling — click to sort',
+                                              child: const _TableHeaderText(
+                                                'Amount',
+                                              ),
+                                            ),
+                                            fixedWidth: amountWidth,
+                                            numeric: true,
+                                            onSort: _onWFPSort,
+                                          ),
+                                          DataColumn2(
+                                            label: Tooltip(
+                                              message:
+                                                  'Current approval status (Approved / Pending / Rejected) — click to sort',
+                                              child: const _TableHeaderText(
+                                                'Approval',
+                                              ),
+                                            ),
+                                            fixedWidth: approvalWidth,
+                                            onSort: _onWFPSort,
+                                          ),
+                                          DataColumn2(
+                                            label: Tooltip(
+                                              message:
+                                                  'Deadline for this WFP — turns red when overdue — click to sort',
+                                              child: const _TableHeaderText(
+                                                'Due Date',
+                                              ),
+                                            ),
+                                            fixedWidth: dueDateWidth,
+                                            onSort: _onWFPSort,
+                                          ),
+                                          DataColumn2(
+                                            label: Tooltip(
+                                              message:
+                                                  'Select a WFP to begin adding or editing its budget activities',
+                                              child: const _TableHeaderText(
+                                                'Actions',
+                                              ),
+                                            ),
+                                            fixedWidth: actionsWidth,
+                                          ),
+                                        ],
+                                        rows: wfpEntries.asMap().entries.map((
+                                          entry,
+                                        ) {
+                                          final i = entry.key;
+                                          final e = entry.value;
+                                          final isSelected =
+                                              selectedWFP?.id == e.id;
+                                          final approvalClr = _approvalColor(
+                                            e.approvalStatus,
+                                          );
+                                          return DataRow2(
+                                            color:
+                                                WidgetStateProperty.resolveWith(
+                                                  (_) {
+                                                    if (isSelected) {
+                                                      return AppColors.selected;
+                                                    }
+                                                    return i.isEven
+                                                        ? AppColors.surface
+                                                        : AppColors.background;
+                                                  },
                                                 ),
-                                                decoration: BoxDecoration(
-                                                  color: const Color(
-                                                    0xff2F3E46,
+                                            cells: [
+                                              DataCell(
+                                                Tooltip(
+                                                  message: 'WFP ID: ${e.id}',
+                                                  child: Text(
+                                                    e.id,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    softWrap: false,
+                                                    style: TextStyle(
+                                                      fontFamily: 'monospace',
+                                                      fontSize: 12,
+                                                      fontWeight: isSelected
+                                                          ? FontWeight.bold
+                                                          : FontWeight.normal,
+                                                      color: isSelected
+                                                          ? AppColors
+                                                                .textPrimary
+                                                          : null,
+                                                    ),
                                                   ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(2),
                                                 ),
                                               ),
-                                            Expanded(
-                                              child: Tooltip(
-                                                message: e.title,
-                                                child: Text(
-                                                  e.title,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: TextStyle(
-                                                    fontWeight: isSelected
-                                                        ? FontWeight.w600
-                                                        : FontWeight.normal,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      DataCell(
-                                        Tooltip(
-                                          message: 'Fund type: ${e.fundType}',
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 7,
-                                              vertical: 2,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: const Color(
-                                                0xff2F3E46,
-                                              ).withValues(alpha: 0.1),
-                                              borderRadius:
-                                                  BorderRadius.circular(5),
-                                            ),
-                                            child: Text(
-                                              e.fundType,
-                                              style: const TextStyle(
-                                                fontSize: 11,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      DataCell(
-                                        Tooltip(
-                                          message: 'Fiscal year: ${e.year}',
-                                          child: Text(e.year.toString()),
-                                        ),
-                                      ),
-                                      DataCell(
-                                        Tooltip(
-                                          message:
-                                              'Total budget ceiling: ${CurrencyFormatter.format(e.amount)}',
-                                          child: Text(
-                                            CurrencyFormatter.format(e.amount),
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      DataCell(
-                                        Tooltip(
-                                          message:
-                                              'Approval status: ${e.approvalStatus}',
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 7,
-                                              vertical: 2,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: approvalClr.withValues(
-                                                alpha: 0.1,
-                                              ),
-                                              borderRadius:
-                                                  BorderRadius.circular(5),
-                                            ),
-                                            child: Text(
-                                              e.approvalStatus,
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                color: approvalClr,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      DataCell(
-                                        e.dueDate == null
-                                            ? Tooltip(
-                                                message: 'No due date set',
-                                                child: Text(
-                                                  '—',
-                                                  style: TextStyle(
-                                                    color: Colors.grey.shade400,
-                                                  ),
-                                                ),
-                                              )
-                                            : Tooltip(
-                                                message: daysUntil == null
-                                                    ? 'Due: ${e.dueDate}'
-                                                    : daysUntil < 0
-                                                        ? 'Overdue by ${-daysUntil} day(s)'
-                                                        : daysUntil == 0
-                                                            ? 'Due today!'
-                                                            : 'Due in $daysUntil day(s)',
-                                                child: Row(
+                                              DataCell(
+                                                Row(
                                                   children: [
-                                                    if (daysUntil != null &&
-                                                        daysUntil <= 7)
-                                                      Padding(
-                                                        padding:
-                                                            const EdgeInsets
-                                                                .only(
-                                                                  right: 4,
-                                                                ),
-                                                        child: Icon(
-                                                          Icons
-                                                              .warning_amber_rounded,
-                                                          size: 13,
-                                                          color: daysUntil < 0
-                                                              ? Colors.red
-                                                              : Colors.orange,
+                                                    if (isSelected)
+                                                      Container(
+                                                        width: 3,
+                                                        height: 20,
+                                                        margin:
+                                                            const EdgeInsets.only(
+                                                              right: 6,
+                                                            ),
+                                                        decoration: BoxDecoration(
+                                                          color:
+                                                              AppColors.primary,
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                2,
+                                                              ),
                                                         ),
                                                       ),
-                                                    Text(
-                                                      e.dueDate!,
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        color: daysUntil !=
-                                                                    null &&
-                                                                daysUntil < 0
-                                                            ? Colors.red.shade600
-                                                            : Colors.black87,
+                                                    Expanded(
+                                                      child: Tooltip(
+                                                        message: e.title,
+                                                        child: Text(
+                                                          e.title,
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
+                                                          style: TextStyle(
+                                                            fontWeight:
+                                                                isSelected
+                                                                ? FontWeight
+                                                                      .w600
+                                                                : FontWeight
+                                                                      .normal,
+                                                          ),
+                                                        ),
                                                       ),
                                                     ),
                                                   ],
                                                 ),
                                               ),
-                                      ),
-                                      DataCell(
-                                        isSelected
-                                            ? Tooltip(
-                                                message:
-                                                    'Currently working on this WFP',
-                                                child: Container(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 8,
-                                                        vertical: 4,
+                                              DataCell(
+                                                _buildCompactChip(
+                                                  text: e.fundType,
+                                                  tooltip:
+                                                      'Fund type: ${e.fundType}',
+                                                  backgroundColor:
+                                                      AppColors.tint(
+                                                        AppColors.textPrimary,
+                                                        0.1,
                                                       ),
-                                                  decoration: BoxDecoration(
-                                                    color: const Color(
-                                                      0xff2F3E46,
-                                                    ).withValues(alpha: 0.08),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          6,
-                                                        ),
-                                                  ),
-                                                  child: const Text(
-                                                    'Selected',
-                                                    style: TextStyle(
-                                                      fontSize: 11,
-                                                      color: Color(0xff2F3E46),
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                    ),
-                                                  ),
-                                                ),
-                                              )
-                                            : Tooltip(
-                                                message:
-                                                    'Select this WFP to add or manage its budget activities',
-                                                child: TextButton.icon(
-                                                  style: TextButton.styleFrom(
-                                                    backgroundColor:
-                                                        const Color(0xff2F3E46),
-                                                    foregroundColor:
-                                                        Colors.white,
-                                                    padding:
-                                                        const EdgeInsets.symmetric(
-                                                          horizontal: 10,
-                                                          vertical: 4,
-                                                        ),
-                                                    minimumSize: Size.zero,
-                                                    tapTargetSize:
-                                                        MaterialTapTargetSize
-                                                            .shrinkWrap,
-                                                    textStyle: const TextStyle(
-                                                      fontSize: 11,
-                                                    ),
-                                                  ),
-                                                  icon: const Icon(
-                                                    Icons.add,
-                                                    size: 13,
-                                                  ),
-                                                  label: const Text(
-                                                    'Add Activity',
-                                                  ),
-                                                  onPressed: () =>
-                                                      _selectWFP(e),
+                                                  textColor:
+                                                      AppColors.textPrimary,
+                                                  maxWidth: fundTypeWidth,
                                                 ),
                                               ),
+                                              DataCell(
+                                                Tooltip(
+                                                  message:
+                                                      'Fiscal year: ${e.year}',
+                                                  child: Text(
+                                                    e.year.toString(),
+                                                  ),
+                                                ),
+                                              ),
+                                              DataCell(
+                                                Tooltip(
+                                                  message:
+                                                      'Total budget ceiling: ${CurrencyFormatter.format(e.amount)}',
+                                                  child: Text(
+                                                    CurrencyFormatter.format(
+                                                      e.amount,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    softWrap: false,
+                                                    style: const TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                              DataCell(
+                                                _buildCompactChip(
+                                                  text: e.approvalStatus,
+                                                  tooltip:
+                                                      'Approval status: ${e.approvalStatus}',
+                                                  backgroundColor: approvalClr
+                                                      .withValues(alpha: 0.1),
+                                                  textColor: approvalClr,
+                                                  maxWidth: approvalWidth,
+                                                ),
+                                              ),
+                                              DataCell(
+                                                e.dueDate == null
+                                                    ? Tooltip(
+                                                        message:
+                                                            'No due date set',
+                                                        child: Text(
+                                                          '—',
+                                                          style: TextStyle(
+                                                            color: Colors
+                                                                .grey
+                                                                .shade400,
+                                                          ),
+                                                        ),
+                                                      )
+                                                    : _buildDueDateCell(
+                                                        e,
+                                                        maxWidth: dueDateWidth,
+                                                      ),
+                                              ),
+                                              DataCell(
+                                                isSelected
+                                                    ? Tooltip(
+                                                        message:
+                                                            'Currently working on this WFP',
+                                                        child: Container(
+                                                          padding:
+                                                              const EdgeInsets.symmetric(
+                                                                horizontal: 8,
+                                                                vertical: 4,
+                                                              ),
+                                                          decoration: BoxDecoration(
+                                                            color:
+                                                                const Color(
+                                                                  0xff2F3E46,
+                                                                ).withValues(
+                                                                  alpha: 0.08,
+                                                                ),
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  6,
+                                                                ),
+                                                          ),
+                                                          child: const Text(
+                                                            'Selected',
+                                                            style: TextStyle(
+                                                              fontSize: 11,
+                                                              color: Color(
+                                                                0xff2F3E46,
+                                                              ),
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      )
+                                                    : Tooltip(
+                                                        message:
+                                                            'Select this WFP to add or manage its budget activities',
+                                                        child: TextButton.icon(
+                                                          style: TextButton.styleFrom(
+                                                            backgroundColor:
+                                                                const Color(
+                                                                  0xff2F3E46,
+                                                                ),
+                                                            foregroundColor:
+                                                                Colors.white,
+                                                            padding:
+                                                                const EdgeInsets.symmetric(
+                                                                  horizontal:
+                                                                      10,
+                                                                  vertical: 4,
+                                                                ),
+                                                            minimumSize:
+                                                                Size.zero,
+                                                            tapTargetSize:
+                                                                MaterialTapTargetSize
+                                                                    .shrinkWrap,
+                                                            textStyle:
+                                                                const TextStyle(
+                                                                  fontSize: 11,
+                                                                ),
+                                                          ),
+                                                          icon: const Icon(
+                                                            Icons.add,
+                                                            size: 13,
+                                                          ),
+                                                          label: const Text(
+                                                            'Add Activity',
+                                                          ),
+                                                          onPressed: () =>
+                                                              _selectWFP(e),
+                                                        ),
+                                                      ),
+                                              ),
+                                            ],
+                                          );
+                                        }).toList(),
                                       ),
-                                    ],
+                                    ),
                                   );
-                                }).toList(),
+                                },
                               ),
                       ),
                     ],
@@ -1003,10 +1209,10 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xff2F3E46).withValues(alpha: 0.05),
+                      color: AppColors.tint(AppColors.primary, 0.1),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: const Color(0xff2F3E46).withValues(alpha: 0.2),
+                        color: AppColors.tint(AppColors.primary, 0.28),
                       ),
                     ),
                     child: Wrap(
@@ -1092,7 +1298,10 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                                   hintText: 'e.g. Community Outreach Program',
                                   helperText:
                                       'Short description of the budget activity',
-                                  prefixIcon: Icon(Icons.label_outline, size: 18),
+                                  prefixIcon: Icon(
+                                    Icons.label_outline,
+                                    size: 18,
+                                  ),
                                 ),
                               ),
                             );
@@ -1115,7 +1324,10 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                                   labelText: 'Total Amount (₱)',
                                   hintText: 'e.g. 1,000,000.00',
                                   helperText: 'Approved budget ceiling (AR)',
-                                  prefixIcon: Icon(Icons.account_balance_wallet_outlined, size: 18),
+                                  prefixIcon: Icon(
+                                    Icons.account_balance_wallet_outlined,
+                                    size: 18,
+                                  ),
                                 ),
                                 onChanged: (_) => _onAmountChanged(),
                               ),
@@ -1139,7 +1351,10 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                                   labelText: 'Projected / Obligated (₱)',
                                   hintText: 'e.g. 800,000.00',
                                   helperText: 'Amount committed so far',
-                                  prefixIcon: Icon(Icons.trending_up_outlined, size: 18),
+                                  prefixIcon: Icon(
+                                    Icons.trending_up_outlined,
+                                    size: 18,
+                                  ),
                                 ),
                                 onChanged: (_) => _onAmountChanged(),
                               ),
@@ -1163,7 +1378,10 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                                   labelText: 'Disbursed (₱)',
                                   hintText: 'e.g. 500,000.00',
                                   helperText: 'Amount actually paid out',
-                                  prefixIcon: Icon(Icons.payments_outlined, size: 18),
+                                  prefixIcon: Icon(
+                                    Icons.payments_outlined,
+                                    size: 18,
+                                  ),
                                 ),
                                 onChanged: (_) => _onAmountChanged(),
                               ),
@@ -1196,60 +1414,65 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
 
                             // ── Suggestion chip ─────────────────────────
                             final suggestionChip = _suggestedStatus != null
-                                ? Padding(
-                                    padding: const EdgeInsets.only(left: 8),
-                                    child: Tooltip(
-                                      message:
-                                          'Based on the amounts you entered, "$_suggestedStatus" '
-                                          'is the recommended status. Click to apply.',
-                                      child: GestureDetector(
-                                        onTap: () => setState(() {
-                                          _status = _suggestedStatus!;
-                                          _suggestedStatus = null;
-                                        }),
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 10,
-                                            vertical: 5,
+                                ? Tooltip(
+                                    message:
+                                        'Based on the amounts you entered, "$_suggestedStatus" '
+                                        'is the recommended status. Click to apply.',
+                                    child: GestureDetector(
+                                      onTap: () => setState(() {
+                                        _status = _suggestedStatus!;
+                                        _suggestedStatus = null;
+                                      }),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 5,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.blue.shade50,
+                                          borderRadius: BorderRadius.circular(
+                                            20,
                                           ),
-                                          decoration: BoxDecoration(
-                                            color: Colors.blue.shade50,
-                                            borderRadius:
-                                                BorderRadius.circular(20),
-                                            border: Border.all(
-                                              color: Colors.blue.shade300,
+                                          border: Border.all(
+                                            color: Colors.blue.shade300,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.auto_fix_high,
+                                              size: 13,
+                                              color: Colors.blue.shade700,
                                             ),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(
-                                                Icons.auto_fix_high,
-                                                size: 13,
+                                            const SizedBox(width: 5),
+                                            Text(
+                                              'Suggest: $_suggestedStatus',
+                                              style: TextStyle(
+                                                fontSize: 11,
                                                 color: Colors.blue.shade700,
+                                                fontWeight: FontWeight.w600,
                                               ),
-                                              const SizedBox(width: 5),
-                                              Text(
-                                                'Suggest: $_suggestedStatus',
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  color: Colors.blue.shade700,
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Icon(
-                                                Icons.check,
-                                                size: 12,
-                                                color: Colors.blue.shade700,
-                                              ),
-                                            ],
-                                          ),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Icon(
+                                              Icons.check,
+                                              size: 12,
+                                              color: Colors.blue.shade700,
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ),
                                   )
-                                : const SizedBox.shrink();
+                                : null;
+
+                            final statusControls = Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [statusDd, ?suggestionChip],
+                            );
 
                             // ── Target date field ───────────────────────
                             final targetDateField = Tooltip(
@@ -1325,7 +1548,7 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                                       : 'Add this new activity to the selected WFP',
                                   child: ElevatedButton.icon(
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xff2F3E46),
+                                      backgroundColor: AppColors.primary,
                                       foregroundColor: Colors.white,
                                     ),
                                     icon: Icon(
@@ -1338,8 +1561,9 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                                           ? 'Save'
                                           : 'Add Activity',
                                     ),
-                                    onPressed:
-                                        isLoading ? null : _submitActivity,
+                                    onPressed: isLoading
+                                        ? null
+                                        : _submitActivity,
                                   ),
                                 ),
                               ],
@@ -1351,49 +1575,98 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                                 children: [
                                   nameField,
                                   const SizedBox(height: 8),
+                                  totalField,
+                                  const SizedBox(height: 8),
+                                  projField,
+                                  const SizedBox(height: 8),
+                                  disbField,
+                                  const SizedBox(height: 8),
+                                  statusControls,
+                                  const SizedBox(height: 8),
+                                  targetDateField,
+                                  const SizedBox(height: 8),
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: actionBtns,
+                                  ),
+                                ],
+                              );
+                            }
+                            if (c.maxWidth < 1150) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
                                   Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
+                                      Expanded(flex: 2, child: nameField),
+                                      const SizedBox(width: 10),
                                       Expanded(child: totalField),
-                                      const SizedBox(width: 8),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
                                       Expanded(child: projField),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Row(
-                                    children: [
+                                      const SizedBox(width: 10),
                                       Expanded(child: disbField),
-                                      const SizedBox(width: 8),
-                                      statusDd,
-                                      suggestionChip,
                                     ],
                                   ),
-                                  const SizedBox(height: 8),
-                                  Row(
+                                  const SizedBox(height: 10),
+                                  Wrap(
+                                    spacing: 10,
+                                    runSpacing: 8,
+                                    crossAxisAlignment:
+                                        WrapCrossAlignment.center,
                                     children: [
-                                      Expanded(child: targetDateField),
-                                      const SizedBox(width: 8),
+                                      SizedBox(
+                                        width: 150,
+                                        child: targetDateField,
+                                      ),
+                                      statusControls,
                                       actionBtns,
                                     ],
                                   ),
                                 ],
                               );
                             }
-                            return Row(
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                Expanded(flex: 2, child: nameField),
-                                const SizedBox(width: 10),
-                                Expanded(child: totalField),
-                                const SizedBox(width: 10),
-                                Expanded(child: projField),
-                                const SizedBox(width: 10),
-                                Expanded(child: disbField),
-                                const SizedBox(width: 10),
-                                statusDd,
-                                suggestionChip,
-                                const SizedBox(width: 10),
-                                SizedBox(width: 150, child: targetDateField),
-                                const SizedBox(width: 10),
-                                actionBtns,
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(flex: 2, child: nameField),
+                                    const SizedBox(width: 10),
+                                    Expanded(child: totalField),
+                                    const SizedBox(width: 10),
+                                    SizedBox(
+                                      width: 150,
+                                      child: targetDateField,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    actionBtns,
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(child: projField),
+                                    const SizedBox(width: 10),
+                                    Expanded(child: disbField),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: statusControls,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ],
                             );
                           },
@@ -1408,8 +1681,7 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                   LayoutBuilder(
                     builder: (context, c) {
                       final searchField = Tooltip(
-                        message:
-                            'Filter activities by ID, name, or status',
+                        message: 'Filter activities by ID, name, or status',
                         child: TextField(
                           controller: _activitySearch,
                           decoration: const InputDecoration(
@@ -1453,8 +1725,7 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                                 'Total number of activities matching your current search filter',
                             child: Text(
                               '${_filteredActivities.length} activit${_filteredActivities.length == 1 ? 'y' : 'ies'}',
-                              style:
-                                  TextStyle(color: Colors.grey.shade600),
+                              style: TextStyle(color: Colors.grey.shade600),
                             ),
                           ),
                         ],
@@ -1494,7 +1765,7 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                       ),
                       const SizedBox(width: 6),
                       IconButton(
-                        tooltip: 'Zoom out — make table text smaller',
+                        tooltip: 'Zoom out - make the table smaller.',
                         icon: const Icon(Icons.remove_circle_outline),
                         iconSize: 20,
                         padding: EdgeInsets.zero,
@@ -1518,14 +1789,14 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                       Tooltip(
                         message:
                             'Current zoom level (${(_zoom / _baselineZoom * 100).round()}%). '
-                            'Click reset to return to 100%.',
+                            'Click the reset button to restore default.',
                         child: Text(
                           '${(_zoom / _baselineZoom * 100).round()}%',
                           style: const TextStyle(fontSize: 12),
                         ),
                       ),
                       IconButton(
-                        tooltip: 'Reset zoom to default (100%)',
+                        tooltip: 'Reset zoom to default (100%).',
                         icon: const Icon(Icons.refresh),
                         iconSize: 20,
                         padding: EdgeInsets.zero,
@@ -1540,7 +1811,8 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                         },
                       ),
                       IconButton(
-                        tooltip: 'Zoom in — make table text larger',
+                        tooltip:
+                            'Zoom in - make the table larger. A horizontal scrollbar appears when zoomed in.',
                         icon: const Icon(Icons.add_circle_outline),
                         iconSize: 20,
                         padding: EdgeInsets.zero,
@@ -1570,18 +1842,38 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                       final baseWidth = constraints.maxWidth < _tableMinWidth
                           ? _tableMinWidth
                           : constraints.maxWidth;
+                      final tableWidth = _zoom > _baselineZoom
+                          ? baseWidth * _zoom
+                          : baseWidth;
+                      final activityIdWidth = _responsiveColumnWidth(
+                        tableWidth,
+                        fraction: 0.16,
+                        min: 134,
+                        max: 170,
+                      );
+                      final statusWidth = _responsiveColumnWidth(
+                        tableWidth,
+                        fraction: 0.11,
+                        min: 92,
+                        max: 122,
+                      );
+                      final actionsWidth = _responsiveColumnWidth(
+                        tableWidth,
+                        fraction: 0.12,
+                        min: 112,
+                        max: 142,
+                      );
 
-                      final tableRows =
-                          _pagedRows.asMap().entries.map((entry) {
+                      final tableRows = _pagedRows.asMap().entries.map((entry) {
                         final i = entry.key;
                         final a = entry.value;
                         final isEditing = _editingActivity?.id == a.id;
                         return DataRow2(
                           color: WidgetStateProperty.resolveWith((_) {
-                            if (isEditing) return Colors.blue.shade50;
+                            if (isEditing) return AppColors.selected;
                             return i.isEven
-                                ? Colors.white
-                                : Colors.grey.shade50;
+                                ? AppColors.surface
+                                : AppColors.background;
                           }),
                           cells: [
                             DataCell(
@@ -1589,6 +1881,9 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                                 message: 'Activity ID: ${a.id}',
                                 child: Text(
                                   a.id,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  softWrap: false,
                                   style: const TextStyle(
                                     fontFamily: 'monospace',
                                     fontSize: 11,
@@ -1599,14 +1894,24 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                             DataCell(
                               Tooltip(
                                 message: a.name,
-                                child: Text(a.name),
+                                child: Text(
+                                  a.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  softWrap: false,
+                                ),
                               ),
                             ),
                             DataCell(
                               Tooltip(
                                 message:
                                     'Total AR: ${CurrencyFormatter.format(a.total)}',
-                                child: Text(CurrencyFormatter.format(a.total)),
+                                child: Text(
+                                  CurrencyFormatter.format(a.total),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  softWrap: false,
+                                ),
                               ),
                             ),
                             DataCell(
@@ -1615,6 +1920,9 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                                     'Projected / Obligated: ${CurrencyFormatter.format(a.projected)}',
                                 child: Text(
                                   CurrencyFormatter.format(a.projected),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  softWrap: false,
                                 ),
                               ),
                             ),
@@ -1624,6 +1932,9 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                                     'Disbursed: ${CurrencyFormatter.format(a.disbursed)}',
                                 child: Text(
                                   CurrencyFormatter.format(a.disbursed),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  softWrap: false,
                                 ),
                               ),
                             ),
@@ -1634,6 +1945,9 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                                     '${a.balance < 0 ? "\n⚠ Negative balance — disbursements exceed total AR" : ""}',
                                 child: Text(
                                   CurrencyFormatter.format(a.balance),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  softWrap: false,
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     color: a.balance >= 0
@@ -1644,28 +1958,14 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                               ),
                             ),
                             DataCell(
-                              Tooltip(
-                                message: 'Status: ${a.status}',
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 3,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: _statusColor(a.status).withValues(
-                                      alpha: 0.12,
-                                    ),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    a.status,
-                                    style: TextStyle(
-                                      color: _statusColor(a.status),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
+                              _buildCompactChip(
+                                text: a.status,
+                                tooltip: 'Status: ${a.status}',
+                                backgroundColor: _statusColor(
+                                  a.status,
+                                ).withValues(alpha: 0.12),
+                                textColor: _statusColor(a.status),
+                                maxWidth: statusWidth,
                               ),
                             ),
                             DataCell(
@@ -1679,9 +1979,8 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                                       color: Colors.blueGrey,
                                     ),
                                     tooltip:
-                                        'Edit "${a.name}" — load into form above',
-                                    onPressed: () =>
-                                        _loadActivityIntoForm(a),
+                                        'Edit "${a.name}" - loads data into the form above',
+                                    onPressed: () => _loadActivityIntoForm(a),
                                   ),
                                   IconButton(
                                     icon: Icon(
@@ -1691,8 +1990,7 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                                     ),
                                     tooltip:
                                         'Move "${a.name}" to the Recycle Bin',
-                                    onPressed: () =>
-                                        _confirmDeleteActivity(a),
+                                    onPressed: () => _confirmDeleteActivity(a),
                                   ),
                                 ],
                               ),
@@ -1702,81 +2000,79 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                       }).toList();
 
                       List<DataColumn2> buildColumns() => [
-                            DataColumn2(
-                              label: Tooltip(
-                                message:
-                                    'Auto-generated activity ID — click to sort',
-                                child: const Text('Activity ID'),
-                              ),
-                              size: ColumnSize.M,
-                              onSort: _onActivitySort,
-                            ),
-                            DataColumn2(
-                              label: Tooltip(
-                                message:
-                                    'Name of the budget activity — click to sort',
-                                child: const Text('Activity Name'),
-                              ),
-                              size: ColumnSize.L,
-                              onSort: _onActivitySort,
-                            ),
-                            DataColumn2(
-                              label: Tooltip(
-                                message:
-                                    'Total Allotted Release amount — click to sort',
-                                child: const Text('Total AR (₱)'),
-                              ),
-                              size: ColumnSize.M,
-                              numeric: true,
-                              onSort: _onActivitySort,
-                            ),
-                            DataColumn2(
-                              label: Tooltip(
-                                message:
-                                    'Amount obligated / projected to be spent — click to sort',
-                                child: const Text('Projected (₱)'),
-                              ),
-                              size: ColumnSize.M,
-                              numeric: true,
-                              onSort: _onActivitySort,
-                            ),
-                            DataColumn2(
-                              label: Tooltip(
-                                message:
-                                    'Amount actually paid out — click to sort',
-                                child: const Text('Disbursed (₱)'),
-                              ),
-                              size: ColumnSize.M,
-                              numeric: true,
-                              onSort: _onActivitySort,
-                            ),
-                            DataColumn2(
-                              label: Tooltip(
-                                message:
-                                    'Remaining balance (Total − Disbursed) — red when negative — click to sort',
-                                child: const Text('Balance (₱)'),
-                              ),
-                              size: ColumnSize.M,
-                              numeric: true,
-                              onSort: _onActivitySort,
-                            ),
-                            DataColumn2(
-                              label: Tooltip(
-                                message:
-                                    'Current activity status — click to sort',
-                                child: const Text('Status'),
-                              ),
-                              size: ColumnSize.S,
-                              onSort: _onActivitySort,
-                            ),
-                            const DataColumn2(
-                              label: Tooltip(
-                                message: 'Edit or delete this activity',
-                                child: Text('Actions'),
-                              ),
-                              size: ColumnSize.S,
-                            ),
-                          ];
+                        DataColumn2(
+                          label: Tooltip(
+                            message:
+                                'Auto-generated activity ID — click to sort',
+                            child: const _TableHeaderText('Activity ID'),
+                          ),
+                          fixedWidth: activityIdWidth,
+                          onSort: _onActivitySort,
+                        ),
+                        DataColumn2(
+                          label: Tooltip(
+                            message:
+                                'Name of the budget activity — click to sort',
+                            child: const _TableHeaderText('Activity Name'),
+                          ),
+                          size: ColumnSize.L,
+                          onSort: _onActivitySort,
+                        ),
+                        DataColumn2(
+                          label: Tooltip(
+                            message:
+                                'Total Allotted Release amount — click to sort',
+                            child: const Text('Total AR (₱)'),
+                          ),
+                          size: ColumnSize.M,
+                          numeric: true,
+                          onSort: _onActivitySort,
+                        ),
+                        DataColumn2(
+                          label: Tooltip(
+                            message:
+                                'Amount obligated / projected to be spent — click to sort',
+                            child: const Text('Projected (₱)'),
+                          ),
+                          size: ColumnSize.M,
+                          numeric: true,
+                          onSort: _onActivitySort,
+                        ),
+                        DataColumn2(
+                          label: Tooltip(
+                            message: 'Amount actually paid out — click to sort',
+                            child: const Text('Disbursed (₱)'),
+                          ),
+                          size: ColumnSize.M,
+                          numeric: true,
+                          onSort: _onActivitySort,
+                        ),
+                        DataColumn2(
+                          label: Tooltip(
+                            message:
+                                'Remaining balance (Total − Disbursed) — red when negative — click to sort',
+                            child: const Text('Balance (₱)'),
+                          ),
+                          size: ColumnSize.M,
+                          numeric: true,
+                          onSort: _onActivitySort,
+                        ),
+                        DataColumn2(
+                          label: Tooltip(
+                            message: 'Current activity status — click to sort',
+                            child: const _TableHeaderText('Status'),
+                          ),
+                          fixedWidth: statusWidth,
+                          onSort: _onActivitySort,
+                        ),
+                        DataColumn2(
+                          label: Tooltip(
+                            message: 'Edit or delete this activity',
+                            child: const _TableHeaderText('Actions'),
+                          ),
+                          fixedWidth: actionsWidth,
+                        ),
+                      ];
 
                       return Scrollbar(
                         controller: _hScrollController,
@@ -1797,7 +2093,7 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                                     sortColumnIndex: _sortColumnIndex,
                                     sortAscending: _sortAscending,
                                     headingRowColor: WidgetStateProperty.all(
-                                      const Color(0xff2F3E46),
+                                      AppColors.primary,
                                     ),
                                     headingTextStyle: const TextStyle(
                                       color: Colors.white,
@@ -1824,8 +2120,8 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                                         sortAscending: _sortAscending,
                                         headingRowColor:
                                             WidgetStateProperty.all(
-                                          const Color(0xff2F3E46),
-                                        ),
+                                              AppColors.primary,
+                                            ),
                                         headingTextStyle: const TextStyle(
                                           color: Colors.white,
                                           fontWeight: FontWeight.bold,
@@ -1843,7 +2139,7 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
                     },
                   ),
 
-                  _PaginationBar(
+                  PaginationBar(
                     currentPage: _currentPage,
                     totalPages: _totalPages,
                     totalItems: _filteredActivities.length,
@@ -1984,10 +2280,7 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
 
     if (tooltip == null) return tile;
     return Expanded(
-      child: Tooltip(
-        message: tooltip,
-        child: tile.child,
-      ),
+      child: Tooltip(message: tooltip, child: tile.child),
     );
   }
 
@@ -2014,6 +2307,7 @@ class BudgetOverviewPageState extends State<BudgetOverviewPage> {
 
 // ─── Pagination Bar ───────────────────────────────────────────────────────────
 
+// ignore: unused_element
 class _PaginationBar extends StatelessWidget {
   final int currentPage, totalPages, totalItems, rowsPerPage;
   final void Function(int) onPageChanged;

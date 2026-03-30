@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pims_deped/utils/decimal_input_formatter.dart';
+import 'package:pmis_deped/utils/decimal_input_formatter.dart';
 
 void main() {
   group('MoneyInputFormatter', () {

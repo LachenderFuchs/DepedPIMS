@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:local_notifier/local_notifier.dart';
 import 'package:window_manager/window_manager.dart';
 import 'pages/login_page.dart';
 import 'services/app_state.dart';
 import 'database/database_helper.dart';
+import 'services/deadline_reminder_service.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
@@ -11,8 +13,8 @@ void main() async {
   await windowManager.ensureInitialized();
 
   const WindowOptions windowOptions = WindowOptions(
-    size: Size(1280, 800),         // default launch size
-    minimumSize: Size(1000, 700),  // prevents pixel overflow on resize
+    size: Size(1280, 800), // default launch size
+    minimumSize: Size(480, 640), // keep the app usable on smaller screens
     center: true,
     title: 'PMIS-SGOD',
   );
@@ -22,39 +24,40 @@ void main() async {
     await windowManager.focus();
   });
 
+  await localNotifier.setup(
+    appName: 'PMIS DepED',
+    shortcutPolicy: ShortcutPolicy.requireCreate,
+  );
+
   // Boot the shared state and pre-load WFP entries from SQLite.
   final appState = AppState();
   await appState.init();
+  await DeadlineReminderService.instance.attach(appState);
 
-  // Ensure the auto-backup default is the quick 30s window and schedule
-  // a startup auto-backup after that delay so users get an early snapshot.
+  // Load persisted Windows backup settings before scheduling the first
+  // startup snapshot for this session.
   try {
-    // Adjust session delay to the default; this also cancels any previous timer.
-    // (Settings UI allows changing this for the session.)
-    // ignore: unawaited_futures
-    DatabaseHelper.setAutoBackupDelay(const Duration(seconds: 30));
+    await DatabaseHelper.loadBackupSettings();
   } catch (_) {}
 
-  // Schedule a one-shot trigger after the configured delay so the app makes
-  // an initial consistent snapshot shortly after launch.
-  Future.delayed(const Duration(seconds: 30), () async {
+  Future.delayed(DatabaseHelper.autoBackupDelay, () async {
     try {
       await DatabaseHelper.triggerAutoBackupNow();
     } catch (_) {}
   });
 
-  runApp(PIMSApp(appState: appState));
+  runApp(PMISApp(appState: appState));
 }
 
-class PIMSApp extends StatelessWidget {
+class PMISApp extends StatelessWidget {
   final AppState appState;
 
-  const PIMSApp({super.key, required this.appState});
+  const PMISApp({super.key, required this.appState});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'PIMS DepED',
+      title: 'PMIS DepED',
       debugShowCheckedModeBanner: false,
       // Use the centrally-defined theme instead of an inline one.
       theme: AppTheme.theme,

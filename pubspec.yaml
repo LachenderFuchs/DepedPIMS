@@ -1,5 +1,5 @@
-name: pims_deped
-description: "A new Flutter project."
+name: pmis_deped
+description: "Windows desktop PMIS for DepEd SGOD with local SQLite storage, reporting, backups, and audit tools."
 publish_to: 'none'
 
 version: 1.0.0+1
@@ -26,11 +26,19 @@ dependencies:
   # Required for stable DB file path on Windows
   path_provider: ^2.1.2
   path: ^1.9.0
+  file_picker: ^10.3.10
+  local_notifier: ^0.1.6
+  crypto: ^3.0.6
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  integration_test:
+    sdk: flutter
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/images/

@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import '../services/app_state.dart';
 import '../models/wfp_entry.dart';
 import '../models/budget_activity.dart';
+import '../widgets/responsive_layout.dart';
 import '../widgets/sidebar.dart';
 import '../widgets/summary_card.dart';
+import '../services/dashboard_snapshot.dart';
 import 'wfp_management_page.dart';
 import 'budget_overview_page.dart';
 import 'reports_page.dart';
@@ -11,21 +13,22 @@ import 'deadlines_page.dart';
 import 'settings_page.dart';
 import 'audit_log_page.dart';
 import 'login_page.dart';
+import '../theme/app_theme.dart';
 import '../utils/currency_formatter.dart';
 
-// ─── Design tokens ────────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Design tokens Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
-const _ink = Color(0xFF1C2B33); // deep text
-const _primary = Color(0xFF2F3E46); // brand dark
-const _accent = Color(0xFF3A7CA5); // blue accent
-const _emerald = Color(0xFF52B788); // green
-const _surface = Color(0xFFF8F9FA); // page bg hint
-const _card = Colors.white;
-const _border = Color(0xFFE8ECEF);
-const _muted = Color(0xFF8A9BA8);
-const _mutedBg = Color(0xFFF0F4F7);
+const _ink = AppColors.textPrimary;
+const _primary = AppColors.textPrimary;
+const _accent = AppColors.primary;
+const _emerald = AppColors.success;
+const _surface = AppColors.background;
+const _card = AppColors.surface;
+const _border = AppColors.border;
+const _muted = AppColors.textSecondary;
+const _mutedBg = AppColors.selected;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 class DashboardPage extends StatefulWidget {
   final AppState appState;
@@ -38,6 +41,7 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   int _pageIndex = 0;
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
 
   late final List<Widget> _pages;
 
@@ -51,11 +55,17 @@ class _DashboardPageState extends State<DashboardPage> {
       _DashboardHome(
         appState: widget.appState,
         onNavigate: (i) => _onSidebarSelect(i),
+        onOpenWFP: _openWFPRecord,
+        onOpenActivity: _openActivityRecord,
       ),
       WFPManagementPage(key: _wfpKey, appState: widget.appState),
       BudgetOverviewPage(key: _budgetKey, appState: widget.appState),
       ReportsPage(appState: widget.appState),
-      DeadlinesPage(appState: widget.appState),
+      DeadlinesPage(
+        appState: widget.appState,
+        onOpenWFP: _openWFPRecord,
+        onOpenActivity: _openActivityRecord,
+      ),
       SettingsPage(appState: widget.appState),
       AuditLogPage(appState: widget.appState),
     ];
@@ -84,27 +94,18 @@ class _DashboardPageState extends State<DashboardPage> {
     return false;
   }
 
-  void _onSidebarSelect(int index) {
-    if (index == 7) {
-      _confirmLogout();
-      return;
-    }
-    if (index == _pageIndex) return;
-    if (_currentPageDirty) {
-      _confirmDiscard(index);
-      return;
-    }
-    setState(() => _pageIndex = index);
-  }
-
-  Future<void> _confirmDiscard(int targetIndex) async {
+  Future<bool> _confirmDiscardChanges() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 22),
+            Icon(
+              Icons.warning_amber_rounded,
+              color: AppColors.warning,
+              size: 22,
+            ),
             SizedBox(width: 10),
             Text('Unsaved Changes', style: TextStyle(fontSize: 17)),
           ],
@@ -120,7 +121,7 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange.shade600,
+              backgroundColor: AppColors.warning,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -132,11 +133,64 @@ class _DashboardPageState extends State<DashboardPage> {
         ],
       ),
     );
-    if (confirmed == true && mounted) {
-      if (_pageIndex == 1) _wfpKey.currentState?.clearForm();
-      if (_pageIndex == 2) _budgetKey.currentState?.clearForm();
-      setState(() => _pageIndex = targetIndex);
+    return confirmed == true;
+  }
+
+  void _discardCurrentPageChanges() {
+    if (_pageIndex == 1) _wfpKey.currentState?.clearForm();
+    if (_pageIndex == 2) _budgetKey.currentState?.clearForm();
+  }
+
+  void _onSidebarSelect(int index) async {
+    if (index == 7) {
+      _confirmLogout();
+      return;
     }
+    if (index == _pageIndex) return;
+    if (_currentPageDirty) {
+      final confirmed = await _confirmDiscardChanges();
+      if (!confirmed || !mounted) return;
+      _discardCurrentPageChanges();
+      setState(() => _pageIndex = index);
+      return;
+    }
+    setState(() => _pageIndex = index);
+  }
+
+  Future<void> _openPageAndRun({
+    required int targetPage,
+    required VoidCallback action,
+  }) async {
+    if (_currentPageDirty) {
+      final confirmed = await _confirmDiscardChanges();
+      if (!confirmed || !mounted) return;
+      _discardCurrentPageChanges();
+    }
+
+    if (_pageIndex != targetPage) {
+      if (!mounted) return;
+      setState(() => _pageIndex = targetPage);
+      WidgetsBinding.instance.addPostFrameCallback((_) => action());
+      return;
+    }
+
+    action();
+  }
+
+  Future<void> _openWFPRecord(String wfpId) async {
+    await _openPageAndRun(
+      targetPage: 1,
+      action: () => _wfpKey.currentState?.openWFPById(wfpId),
+    );
+  }
+
+  Future<void> _openActivityRecord(String activityId) async {
+    await _openPageAndRun(
+      targetPage: 2,
+      action: () {
+        _budgetKey.currentState?.openActivityById(activityId);
+      },
+    );
   }
 
   Future<void> _confirmLogout() async {
@@ -153,7 +207,7 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade600,
+              backgroundColor: AppColors.danger,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -167,6 +221,7 @@ class _DashboardPageState extends State<DashboardPage> {
     );
     if (confirmed == true && mounted) {
       widget.appState.clearSelectedWFP();
+      widget.appState.endSession();
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => LoginPage(appState: widget.appState)),
@@ -176,31 +231,73 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _surface,
-      body: Row(
-        children: [
-          Sidebar(
-            currentIndex: _pageIndex,
-            onSelect: _onSidebarSelect,
-            appState: widget.appState,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final useDrawer =
+            constraints.maxWidth < ResponsiveLayout.sidebarBreakpoint;
+        final pageContent = IndexedStack(index: _pageIndex, children: _pages);
+
+        if (!useDrawer) {
+          return Scaffold(
+            backgroundColor: _surface,
+            body: Row(
+              children: [
+                Sidebar(
+                  currentIndex: _pageIndex,
+                  onSelect: _onSidebarSelect,
+                  appState: widget.appState,
+                ),
+                Expanded(child: pageContent),
+              ],
+            ),
+          );
+        }
+
+        return Scaffold(
+          key: _scaffoldKey,
+          backgroundColor: _surface,
+          appBar: AppBar(
+            backgroundColor: AppColors.surface,
+            foregroundColor: _primary,
+            elevation: 0,
+            title: Text(
+              _pageName(_pageIndex),
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
-          Expanded(
-            child: IndexedStack(index: _pageIndex, children: _pages),
+          drawer: Drawer(
+            width: ResponsiveLayout.drawerWidth(constraints.maxWidth),
+            child: Sidebar(
+              compact: true,
+              currentIndex: _pageIndex,
+              onSelect: (index) {
+                Navigator.of(context).pop();
+                _onSidebarSelect(index);
+              },
+              appState: widget.appState,
+            ),
           ),
-        ],
-      ),
+          body: pageContent,
+        );
+      },
     );
   }
 }
 
-// ─── Dashboard Home ───────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Dashboard Home Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 class _DashboardHome extends StatefulWidget {
   final AppState appState;
   final void Function(int) onNavigate;
+  final Future<void> Function(String) onOpenWFP;
+  final Future<void> Function(String) onOpenActivity;
 
-  const _DashboardHome({required this.appState, required this.onNavigate});
+  const _DashboardHome({
+    required this.appState,
+    required this.onNavigate,
+    required this.onOpenWFP,
+    required this.onOpenActivity,
+  });
 
   @override
   State<_DashboardHome> createState() => _DashboardHomeState();
@@ -208,21 +305,8 @@ class _DashboardHome extends StatefulWidget {
 
 class _DashboardHomeState extends State<_DashboardHome> {
   int? _selectedFiscalYearStart;
-  // false = Activity Total (AR − disbursed), true = Totality (WFP budget − disbursed)
+  // false = Activity Total (AR Ã¢Ë†â€™ disbursed), true = Totality (WFP budget Ã¢Ë†â€™ disbursed)
   bool _balanceTotality = false;
-
-  bool _inFiscalYear(WFPEntry e, int startYear) =>
-      e.year == startYear || e.year == startYear + 1;
-
-  List<int> _distinctFYStarts(List<WFPEntry> entries) {
-    final years = entries.map((e) => e.year).toSet();
-    final fyStarts = <int>{};
-    for (final y in years) {
-      fyStarts.add(y - 1);
-      fyStarts.add(y);
-    }
-    return fyStarts.toList()..sort((a, b) => b.compareTo(a));
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -231,42 +315,35 @@ class _DashboardHomeState extends State<_DashboardHome> {
       builder: (context, _) {
         final appState = widget.appState;
         final onNavigate = widget.onNavigate;
-        final allEntries = appState.wfpEntries;
-        final allActivities = appState.allActivities;
-        final fyStarts = _distinctFYStarts(allEntries);
-
-        final entries = _selectedFiscalYearStart == null
-            ? allEntries
-            : allEntries
-                  .where((e) => _inFiscalYear(e, _selectedFiscalYearStart!))
-                  .toList();
-        final filteredActivities = _selectedFiscalYearStart == null
-            ? allActivities
-            : allActivities.where((a) {
-                final wfp = allEntries
-                    .where((e) => e.id == a.wfpId)
-                    .firstOrNull;
-                return wfp != null &&
-                    _inFiscalYear(wfp, _selectedFiscalYearStart!);
-              }).toList();
-
-        final totalBudget = entries.fold<double>(0, (s, e) => s + e.amount);
-        final totalDisbursed = filteredActivities.fold<double>(
-          0,
-          (s, a) => s + a.disbursed,
+        final snapshot = DashboardSnapshot.build(
+          allEntries: appState.wfpEntries,
+          allActivities: appState.allActivities,
+          fiscalYearStart: _selectedFiscalYearStart,
         );
-        final activityBalance = filteredActivities.fold<double>(
-          0,
-          (s, a) => s + a.balance,
-        );
-          final totalityBalance = totalBudget - totalDisbursed;
-          // ignore: unused_local_variable
-          final totalBalance = _balanceTotality ? totalityBalance : activityBalance;
+        final welcomeMessage = appState.hasActiveSession
+            ? 'Welcome, ${appState.currentActorName}'
+            : 'Welcome to PMIS DepED';
+        final fyStarts = snapshot.fiscalYearStarts;
+        final entries = snapshot.entries;
+        final filteredActivities = snapshot.activities;
+        final totalBudget = snapshot.totalBudget;
+        final totalDisbursed = snapshot.totalDisbursed;
+        final activityBalance = snapshot.activityBalance;
+        final totalityBalance = snapshot.totalityBalance;
+        // ignore: unused_local_variable
+        final totalBalance = _balanceTotality
+            ? totalityBalance
+            : activityBalance;
 
         return LayoutBuilder(
           builder: (context, constraints) {
             final wide = constraints.maxWidth > 700;
             final cardGap = wide ? 16.0 : 8.0;
+            final pagePadding = ResponsiveLayout.pagePaddingForWidth(
+              constraints.maxWidth,
+            );
+            final stackHeader =
+                constraints.maxWidth < ResponsiveLayout.compactBreakpoint;
 
             Widget statCards = wide
                 ? Column(
@@ -301,7 +378,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
                           Expanded(
                             child: SummaryCard(
                               title: 'Total Activities',
-                              value: appState.totalActivityCount.toString(),
+                              value: snapshot.totalActivityCount.toString(),
                             ),
                           ),
                         ],
@@ -366,7 +443,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
                         width: (constraints.maxWidth - cardGap) / 2 - 1,
                         child: SummaryCard(
                           title: 'Total Activities',
-                          value: appState.totalActivityCount.toString(),
+                          value: snapshot.totalActivityCount.toString(),
                         ),
                       ),
                       SizedBox(
@@ -479,47 +556,87 @@ class _DashboardHomeState extends State<_DashboardHome> {
                   );
 
             return SingleChildScrollView(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+              padding: pagePadding,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1480),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Dashboard',
-                            style: TextStyle(
-                              fontSize: 26,
-                              fontWeight: FontWeight.w700,
-                              color: _ink,
-                              letterSpacing: -0.5,
+                      if (stackHeader)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Dashboard',
+                                  style: TextStyle(
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.w700,
+                                    color: _ink,
+                                    letterSpacing: -0.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  welcomeMessage,
+                                  style: TextStyle(color: _muted, fontSize: 13),
+                                ),
+                              ],
                             ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Welcome to PIMS DepED',
-                            style: TextStyle(color: _muted, fontSize: 13),
-                          ),
-                        ],
-                      ),
-                      const Spacer(),
-                      fySelector,
+                            if (fySelector is! SizedBox) ...[
+                              const SizedBox(height: 16),
+                              fySelector,
+                            ],
+                          ],
+                        )
+                      else
+                        Row(
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Dashboard',
+                                  style: TextStyle(
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.w700,
+                                    color: _ink,
+                                    letterSpacing: -0.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  welcomeMessage,
+                                  style: TextStyle(color: _muted, fontSize: 13),
+                                ),
+                              ],
+                            ),
+                            const Spacer(),
+                            fySelector,
+                          ],
+                        ),
+                      const SizedBox(height: 28),
+                      if (appState.deadlineWarningCount > 0) ...[
+                        _DeadlineBanner(
+                          appState: appState,
+                          onNavigate: onNavigate,
+                          onOpenWFP: widget.onOpenWFP,
+                          onOpenActivity: widget.onOpenActivity,
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+                      statCards,
+                      const SizedBox(height: 28),
+                      chartsRow,
+                      if (entries.isNotEmpty) const SizedBox(height: 28),
+                      panelsRow,
+                      const SizedBox(height: 8),
                     ],
                   ),
-                  const SizedBox(height: 28),
-                  if (appState.deadlineWarningCount > 0) ...[
-                    _DeadlineBanner(appState: appState, onNavigate: onNavigate),
-                    const SizedBox(height: 20),
-                  ],
-                  statCards,
-                  const SizedBox(height: 28),
-                  chartsRow,
-                  if (entries.isNotEmpty) const SizedBox(height: 28),
-                  panelsRow,
-                  const SizedBox(height: 8),
-                ],
+                ),
               ),
             );
           },
@@ -529,7 +646,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
   }
 }
 
-// ─── Fiscal Year Selector ─────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Fiscal Year Selector Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 class _FYSelector extends StatelessWidget {
   final List<int> fyStarts;
@@ -582,7 +699,7 @@ class _FYSelector extends StatelessWidget {
                 ...fyStarts.map(
                   (y) => DropdownMenuItem<int?>(
                     value: y,
-                    child: Text('FY $y–${y + 1}'),
+                    child: Text('FY $y-${y + 1}'),
                   ),
                 ),
               ],
@@ -609,7 +726,7 @@ class _FYSelector extends StatelessWidget {
   }
 }
 
-// ─── WFP Mini List ────────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ WFP Mini List Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 class _WFPMiniList extends StatelessWidget {
   final List<WFPEntry> entries;
@@ -628,10 +745,7 @@ class _WFPMiniList extends StatelessWidget {
             onTap: () => onNavigate(1),
             hoverColor: _mutedBg,
             child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 10,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Row(
                 children: [
                   SizedBox(
@@ -693,7 +807,7 @@ class _WFPMiniList extends StatelessWidget {
   }
 }
 
-// ─── Activity Mini List ───────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Activity Mini List Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 class _ActivityMiniList extends StatelessWidget {
   final List<BudgetActivity> activities;
@@ -789,7 +903,7 @@ class _ActivityMiniList extends StatelessWidget {
   }
 }
 
-// ─── Tag chip ─────────────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Tag chip Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 class _Tag extends StatelessWidget {
   final String label;
@@ -813,7 +927,7 @@ class _Tag extends StatelessWidget {
   }
 }
 
-// ─── Mini-list card ───────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Mini-list card Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 class _MiniListCard extends StatelessWidget {
   final List<Widget> children;
@@ -869,7 +983,7 @@ Widget _emptyMiniList(String message) {
   );
 }
 
-// ─── Budget vs Disbursed Bar Chart ────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Budget vs Disbursed Bar Chart Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 class _BudgetVsDisbursedChart extends StatefulWidget {
   final List<WFPEntry> entries;
@@ -954,7 +1068,7 @@ class _BudgetVsDisbursedChartState extends State<_BudgetVsDisbursedChart> {
                       ),
                       const SizedBox(height: 2),
                       const Text(
-                        'Per WFP entry — most recent 6',
+                        'Per WFP entry - most recent 6',
                         style: TextStyle(fontSize: 11, color: _muted),
                       ),
                     ],
@@ -1007,7 +1121,7 @@ class _BudgetVsDisbursedChartState extends State<_BudgetVsDisbursedChart> {
                       child: Stack(
                         clipBehavior: Clip.none,
                         children: [
-                          // Gridlines — very subtle
+                          // Gridlines Ã¢â‚¬â€ very subtle
                           ...List.generate(gridLines + 1, (i) {
                             final topPx =
                                 tooltipH + (i / gridLines) * maxBarHeight;
@@ -1313,8 +1427,7 @@ class _LegendDot extends StatelessWidget {
   }
 }
 
-
-// ─── Fund Type Distribution Chart ────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Fund Type Distribution Chart Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 class _FundTypeDistributionChart extends StatelessWidget {
   final List<WFPEntry> entries;
@@ -1483,7 +1596,7 @@ class _FundTypeDistributionChart extends StatelessWidget {
   }
 }
 
-// ─── Balance Card with mode toggle ───────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Balance Card with mode toggle Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 class _BalanceCard extends StatelessWidget {
   final double activityBalance;
@@ -1513,7 +1626,7 @@ class _BalanceCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Title row ───────────────────────────────────────────────
+            // Ã¢â€â‚¬Ã¢â€â‚¬ Title row Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
             Row(
               children: [
                 Text(
@@ -1536,7 +1649,7 @@ class _BalanceCard extends StatelessWidget {
 
             const SizedBox(height: 8),
 
-            // ── Value ────────────────────────────────────────────────────
+            // Ã¢â€â‚¬Ã¢â€â‚¬ Value Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
             Text(
               CurrencyFormatter.format(value),
               style: TextStyle(
@@ -1549,15 +1662,15 @@ class _BalanceCard extends StatelessWidget {
 
             const SizedBox(height: 2),
 
-            // ── Sub-label: what the other mode would show ────────────────
+            // Ã¢â€â‚¬Ã¢â€â‚¬ Sub-label: what the other mode would show Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
             Text(
-              isTotality ? 'WFP Budget − Disbursed' : 'Activity AR − Disbursed',
+              isTotality ? 'WFP Budget - Disbursed' : 'Activity AR - Disbursed',
               style: TextStyle(fontSize: 10, color: Colors.grey.shade400),
             ),
 
             const SizedBox(height: 12),
 
-            // ── Toggle ───────────────────────────────────────────────────
+            // Ã¢â€â‚¬Ã¢â€â‚¬ Toggle Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
             Container(
               height: 30,
               decoration: BoxDecoration(
@@ -1571,14 +1684,14 @@ class _BalanceCard extends StatelessWidget {
                     active: !isTotality,
                     onTap: () => onToggle(false),
                     tooltip:
-                        'Sum of (Activity AR − Disbursed) per activity row',
+                        'Sum of (Activity AR - Disbursed) per activity row',
                   ),
                   _ToggleTab(
                     label: 'Totality',
                     active: isTotality,
                     onTap: () => onToggle(true),
                     tooltip:
-                        'Total WFP Budget − Total Disbursed across all activities',
+                        'Total WFP Budget - Total Disbursed across all activities',
                   ),
                 ],
               ),
@@ -1634,20 +1747,27 @@ class _ToggleTab extends StatelessWidget {
   }
 }
 
-// ─── Deadline Warning Banner ──────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Deadline Warning Banner Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 class _DeadlineBanner extends StatelessWidget {
   final AppState appState;
   final void Function(int) onNavigate;
+  final Future<void> Function(String) onOpenWFP;
+  final Future<void> Function(String) onOpenActivity;
 
-  const _DeadlineBanner({required this.appState, required this.onNavigate});
+  const _DeadlineBanner({
+    required this.appState,
+    required this.onNavigate,
+    required this.onOpenWFP,
+    required this.onOpenActivity,
+  });
 
   Color _urgencyColor(int? days) {
-    if (days == null) return Colors.grey.shade400;
-    if (days < 0) return const Color(0xFFB00020);
-    if (days <= 3) return const Color(0xFFD32F2F);
-    if (days <= 7) return const Color(0xFFE65100);
-    return const Color(0xFFF57C00);
+    if (days == null) return AppColors.textSecondary.withValues(alpha: 0.65);
+    if (days < 0) return AppColors.danger;
+    if (days <= 3) return AppColors.danger;
+    if (days <= 7) return AppColors.warning;
+    return AppColors.info;
   }
 
   String _daysLabel(int? days) {
@@ -1664,21 +1784,30 @@ class _DeadlineBanner extends StatelessWidget {
     final total = appState.deadlineWarningCount;
 
     // Combine and take up to 4 preview items, most urgent first
-    final previews = <({String id, String name, String sub, int? days})>[];
+    final previews =
+        <
+          ({String id, String name, String sub, int? days, VoidCallback onTap})
+        >[];
     for (final e in wfps) {
       previews.add((
         id: e.id,
         name: e.title,
-        sub: '${e.fundType} · ${e.year}',
+        sub: '${e.fundType} | ${e.year}',
         days: e.daysUntilDue,
+        onTap: () {
+          onOpenWFP(e.id);
+        },
       ));
     }
     for (final a in activities) {
       previews.add((
         id: a.id,
         name: a.name,
-        sub: 'Activity · ${a.wfpId}',
+        sub: 'Activity | ${a.wfpId}',
         days: a.daysUntilTarget,
+        onTap: () {
+          onOpenActivity(a.id);
+        },
       ));
     }
     previews.sort((a, b) {
@@ -1691,12 +1820,15 @@ class _DeadlineBanner extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF8F0),
+        color: AppColors.tint(AppColors.warning, 0.12),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFFFCC80), width: 1.5),
+        border: Border.all(
+          color: AppColors.tint(AppColors.warning, 0.4),
+          width: 1.5,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.orange.withValues(alpha: 0.08),
+            color: AppColors.tint(AppColors.warning, 0.14),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -1705,7 +1837,7 @@ class _DeadlineBanner extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Banner header ───────────────────────────────────────────────
+          // Ã¢â€â‚¬Ã¢â€â‚¬ Banner header Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
           Padding(
             padding: const EdgeInsets.fromLTRB(18, 14, 14, 10),
             child: Row(
@@ -1713,12 +1845,12 @@ class _DeadlineBanner extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(7),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFE0B2),
+                    color: AppColors.tint(AppColors.warning, 0.22),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
                     Icons.schedule_rounded,
-                    color: Color(0xFFE65100),
+                    color: AppColors.warning,
                     size: 18,
                   ),
                 ),
@@ -1733,17 +1865,17 @@ class _DeadlineBanner extends StatelessWidget {
                         style: const TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 14,
-                          color: Color(0xFF4E2600),
+                          color: AppColors.textPrimary,
                           letterSpacing: -0.2,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${wfps.length} WFP entr${wfps.length == 1 ? 'y' : 'ies'}  ·  '
+                        '${wfps.length} WFP entr${wfps.length == 1 ? 'y' : 'ies'} | '
                         '${activities.length} activit${activities.length == 1 ? 'y' : 'ies'}',
                         style: const TextStyle(
                           fontSize: 11,
-                          color: Color(0xFF8D4E00),
+                          color: AppColors.textSecondary,
                         ),
                       ),
                     ],
@@ -1753,8 +1885,8 @@ class _DeadlineBanner extends StatelessWidget {
                   message: 'View all deadlines',
                   child: TextButton.icon(
                     style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFFE65100),
-                      backgroundColor: const Color(0xFFFFE0B2),
+                      foregroundColor: AppColors.warning,
+                      backgroundColor: AppColors.tint(AppColors.warning, 0.22),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -1766,7 +1898,10 @@ class _DeadlineBanner extends StatelessWidget {
                     icon: const Icon(Icons.open_in_new_rounded, size: 14),
                     label: const Text(
                       'View All',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     onPressed: () => onNavigate(4),
                   ),
@@ -1775,10 +1910,10 @@ class _DeadlineBanner extends StatelessWidget {
             ),
           ),
 
-          // ── Divider ─────────────────────────────────────────────────────
-          const Divider(height: 1, color: Color(0xFFFFCC80)),
+          // Ã¢â€â‚¬Ã¢â€â‚¬ Divider Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+          Divider(height: 1, color: AppColors.tint(AppColors.warning, 0.4)),
 
-          // ── Preview items ────────────────────────────────────────────────
+          // Ã¢â€â‚¬Ã¢â€â‚¬ Preview items Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
           ...shown.asMap().entries.map((entry) {
             final i = entry.key;
             final item = entry.value;
@@ -1787,83 +1922,84 @@ class _DeadlineBanner extends StatelessWidget {
 
             return Column(
               children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 10,
-                  ),
-                  child: Row(
-                    children: [
-                      // Urgency dot
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: uc,
-                          shape: BoxShape.circle,
-                        ),
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: item.onTap,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 10,
                       ),
-                      const SizedBox(width: 12),
-                      // ID
-                      SizedBox(
-                        width: 150,
-                        child: Text(
-                          item.id,
-                          style: const TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 10,
-                            color: _accent,
-                            fontWeight: FontWeight.w600,
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: uc,
+                              shape: BoxShape.circle,
+                            ),
                           ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      // Name
-                      Expanded(
-                        child: Text(
-                          item.name,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: _ink,
+                          const SizedBox(width: 12),
+                          SizedBox(
+                            width: 150,
+                            child: Text(
+                              item.id,
+                              style: const TextStyle(
+                                fontFamily: 'monospace',
+                                fontSize: 10,
+                                color: _accent,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      // Sub
-                      Text(
-                        item.sub,
-                        style: const TextStyle(fontSize: 11, color: _muted),
-                      ),
-                      const SizedBox(width: 14),
-                      // Days badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 9,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: uc.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          _daysLabel(item.days),
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: uc,
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              item.name,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: _ink,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ),
+                          const SizedBox(width: 8),
+                          Text(
+                            item.sub,
+                            style: const TextStyle(fontSize: 11, color: _muted),
+                          ),
+                          const SizedBox(width: 14),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 9,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: uc.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              _daysLabel(item.days),
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: uc,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
                 if (!isLast)
                   const Divider(
                     height: 1,
-                    color: Color(0xFFFFE0B2),
+                    color: AppColors.border,
                     indent: 38,
                     endIndent: 18,
                   ),
@@ -1871,7 +2007,7 @@ class _DeadlineBanner extends StatelessWidget {
             );
           }),
 
-          // ── "And N more" footer ──────────────────────────────────────────
+          // Ã¢â€â‚¬Ã¢â€â‚¬ "And N more" footer Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
           if (hidden > 0)
             InkWell(
               onTap: () => onNavigate(4),
@@ -1882,18 +2018,18 @@ class _DeadlineBanner extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: const BoxDecoration(
-                  color: Color(0xFFFFECCC),
+                  color: AppColors.selected,
                   borderRadius: BorderRadius.vertical(
                     bottom: Radius.circular(14),
                   ),
                 ),
                 child: Center(
                   child: Text(
-                    '+ $hidden more — tap to view all deadlines',
+                    '+ $hidden more - tap to view all deadlines',
                     style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFFE65100),
+                      color: AppColors.warning,
                     ),
                   ),
                 ),
@@ -1907,7 +2043,7 @@ class _DeadlineBanner extends StatelessWidget {
   }
 }
 
-// ─── Panel Card ───────────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Panel Card Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 class _PanelCard extends StatelessWidget {
   final IconData icon;

@@ -2,32 +2,113 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart' as p;
 import '../models/wfp_entry.dart';
 import '../models/budget_activity.dart';
 
+class ArchiveSnapshotInfo {
+  const ArchiveSnapshotInfo({
+    required this.path,
+    required this.modifiedAt,
+    required this.sizeBytes,
+    required this.isAutoBackup,
+  });
+
+  final String path;
+  final DateTime modifiedAt;
+  final int sizeBytes;
+  final bool isAutoBackup;
+
+  String get fileName => p.basename(path);
+
+  String get displayName {
+    final baseName = p.basenameWithoutExtension(path);
+
+    if (isAutoBackup) {
+      return 'Automatic backup';
+    }
+
+    if (baseName.startsWith('pmis_deped_pre_restore_')) {
+      return 'Pre-restore safeguard';
+    }
+
+    if (baseName.startsWith('pmis_deped_manual_')) {
+      var label = baseName.substring('pmis_deped_manual_'.length);
+      final stampMatch = RegExp(r'_(\d{8}_\d{6})$').firstMatch(label);
+      if (stampMatch != null) {
+        label = label.substring(0, stampMatch.start);
+      }
+      final cleaned = label.replaceAll(RegExp(r'[_-]+'), ' ').trim();
+      if (cleaned.isNotEmpty) {
+        return cleaned;
+      }
+    }
+
+    if (baseName.startsWith('pmis_deped_')) {
+      return 'Manual backup';
+    }
+
+    return baseName.replaceAll(RegExp(r'[_-]+'), ' ').trim();
+  }
+}
+
 class DatabaseHelper {
   static Database? _db;
+  static const _databaseFileName = 'pmis_deped.db';
+  static const _legacyDatabaseFileName = 'pims_deped.db';
+  static const _appDataFolderName = 'PMIS DepED';
+  static const _archivesFolderName = 'archives';
+  static String? _dataRootPathOverride;
+  static String? _databasePathOverride;
+  static String? _archivesPathOverride;
+  static String? _cachedDataRootPath;
 
-  // ─── Auto-backup config ────────────────────────────────────────────────────
+  // â”€â”€â”€ Auto-backup config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Delay after the LAST write event before the backup actually fires.
   // Resets on every new write, so only one backup runs per burst of activity.
   // Default: 30 minutes. Changeable at runtime via setAutoBackupDelay().
   // Default to 30 seconds on app startup as the recommended quick auto-backup
   // behavior. This can be changed by the user in Settings during the session.
-  static Duration _autoBackupDelay  = const Duration(seconds: 30);
-  static const _maxAutoBackups      = 5;
-  static const _autoBackupSubdir    = 'auto';
+  static Duration _autoBackupDelay = const Duration(seconds: 30);
+  static int _maxAutoBackups = 5;
+  static const _autoBackupSubdir = 'auto';
+  static const _manualBackupSubdir = 'manual';
+  static const _prefsAutoBackupDelayKey = 'autoBackupDelaySeconds';
+  static const _prefsAutoBackupRetentionKey = 'autoBackupRetentionCount';
   static Timer? _autoBackupTimer;
 
-  /// Change the delay window (call from settings; persists for the session).
-  /// Supported values: 30 min, 1 hour. Cancels any pending timer so the
+  /// Load persisted backup settings for this Windows desktop install.
+  static Future<void> loadBackupSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    final delaySeconds = prefs.getInt(_prefsAutoBackupDelayKey);
+    final retention = prefs.getInt(_prefsAutoBackupRetentionKey);
+    if (delaySeconds != null && delaySeconds > 0) {
+      _autoBackupDelay = Duration(seconds: delaySeconds);
+    }
+    if (retention != null && retention > 0) {
+      _maxAutoBackups = retention;
+    }
+  }
+
+  /// Change the delay window and persist it for later launches. Cancels any
+  /// pending timer so the
   /// new delay takes effect on the next write event.
-  static void setAutoBackupDelay(Duration delay) {
+  static Future<void> setAutoBackupDelay(Duration delay) async {
     _autoBackupDelay = delay;
     _autoBackupTimer?.cancel();
     _autoBackupTimer = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_prefsAutoBackupDelayKey, delay.inSeconds);
+  }
+
+  /// Change the maximum number of retained auto-backups.
+  static Future<void> setAutoBackupRetention(int maxBackups) async {
+    _maxAutoBackups = maxBackups < 1 ? 1 : maxBackups;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_prefsAutoBackupRetentionKey, _maxAutoBackups);
   }
 
   /// Trigger an immediate auto-backup (useful for startup scheduling).
@@ -42,13 +123,196 @@ class DatabaseHelper {
 
   /// Read the current delay setting (for the UI).
   static Duration get autoBackupDelay => _autoBackupDelay;
+  static int get autoBackupRetention => _maxAutoBackups;
 
-  /// Last auto-backup result — readable by the UI (settings page).\n
+  /// Last auto-backup result â€” readable by the UI (settings page).\n
   static DateTime? lastAutoBackupTime;
-  static String?   lastAutoBackupPath;
-  static bool      lastAutoBackupFailed = false;
+  static String? lastAutoBackupPath;
+  static bool lastAutoBackupFailed = false;
 
-  // ─── Connection ────────────────────────────────────────────────────────────
+  static String _timestamp(DateTime now) =>
+      '${now.year.toString().padLeft(4, '0')}'
+      '${now.month.toString().padLeft(2, '0')}'
+      '${now.day.toString().padLeft(2, '0')}_'
+      '${now.hour.toString().padLeft(2, '0')}'
+      '${now.minute.toString().padLeft(2, '0')}'
+      '${now.second.toString().padLeft(2, '0')}';
+
+  static Future<String> get installDirectoryPath async =>
+      File(Platform.resolvedExecutable).parent.path;
+
+  static Future<String> get dataDirectoryPath async {
+    final override = _dataRootPathOverride;
+    if (override != null && override.isNotEmpty) {
+      return _ensureDirectoryPath(override);
+    }
+    if (_cachedDataRootPath != null && _cachedDataRootPath!.isNotEmpty) {
+      return _cachedDataRootPath!;
+    }
+
+    final String basePath;
+    if (Platform.isWindows) {
+      final localAppData = Platform.environment['LOCALAPPDATA'];
+      if (localAppData != null && localAppData.trim().isNotEmpty) {
+        basePath = localAppData;
+      } else {
+        final supportDir = await getApplicationSupportDirectory();
+        basePath = supportDir.path;
+      }
+    } else {
+      final supportDir = await getApplicationSupportDirectory();
+      basePath = supportDir.path;
+    }
+
+    _cachedDataRootPath = await _ensureDirectoryPath(
+      p.join(basePath, _appDataFolderName),
+    );
+    return _cachedDataRootPath!;
+  }
+
+  static Future<String> get databaseFilePath async {
+    final override = _databasePathOverride;
+    if (override != null && override.isNotEmpty) {
+      await Directory(p.dirname(override)).create(recursive: true);
+      return override;
+    }
+    return p.join(await dataDirectoryPath, _databaseFileName);
+  }
+
+  static Future<String> get archivesDirectoryPath async {
+    final override = _archivesPathOverride;
+    if (override != null && override.isNotEmpty) {
+      return _ensureDirectoryPath(override);
+    }
+    return _ensureDirectoryPath(
+      p.join(await dataDirectoryPath, _archivesFolderName),
+    );
+  }
+
+  static Future<String> get autoArchivesDirectoryPath async =>
+      _ensureDirectoryPath(
+        p.join(await archivesDirectoryPath, _autoBackupSubdir),
+      );
+
+  static Future<String> get manualArchivesDirectoryPath async =>
+      _ensureDirectoryPath(
+        p.join(await archivesDirectoryPath, _manualBackupSubdir),
+      );
+
+  static Future<String> _ensureDirectoryPath(String path) async {
+    final dir = Directory(path);
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+    return dir.path;
+  }
+
+  static Future<String> _createArchiveSnapshot({
+    required String fileName,
+    String? subdirectory,
+  }) async {
+    final archivesRoot = Directory(await archivesDirectoryPath);
+    final targetDir = Directory(
+      subdirectory == null || subdirectory.isEmpty
+          ? archivesRoot.path
+          : p.join(archivesRoot.path, subdirectory),
+    );
+    if (!await targetDir.exists()) {
+      await targetDir.create(recursive: true);
+    }
+
+    final dest = p.join(targetDir.path, fileName);
+    final destForSql = dest.replaceAll('\\', '/');
+    final d = await db;
+    await d.execute("VACUUM INTO '$destForSql'");
+
+    final valid = await validateArchive(dest);
+    if (!valid) {
+      try {
+        final invalid = File(dest);
+        if (await invalid.exists()) await invalid.delete();
+      } catch (_) {}
+      throw Exception('Created snapshot failed integrity validation.');
+    }
+
+    return dest;
+  }
+
+  static Future<void> _migrateLegacyDatabaseFile({
+    required String legacyDbPath,
+    required String dbPath,
+    required DatabaseFactory factory,
+  }) async {
+    if (legacyDbPath == dbPath) return;
+
+    final currentFile = File(dbPath);
+    if (await currentFile.exists()) return;
+
+    final legacyFile = File(legacyDbPath);
+    if (!await legacyFile.exists()) return;
+
+    final legacyValid = await _isDatabaseValid(legacyDbPath, factory);
+    if (!legacyValid) {
+      debugPrint('[DB] Skipped legacy database migration from $legacyDbPath');
+      return;
+    }
+
+    try {
+      await legacyFile.rename(dbPath);
+      debugPrint('[DB] Migrated legacy database to $dbPath');
+    } on FileSystemException {
+      await legacyFile.copy(dbPath);
+      debugPrint('[DB] Copied legacy database to $dbPath');
+    }
+  }
+
+  static Future<void> _migrateLegacyArchives({
+    required String legacyArchivesPath,
+    required String targetArchivesPath,
+  }) async {
+    if (p.equals(
+      p.normalize(legacyArchivesPath),
+      p.normalize(targetArchivesPath),
+    )) {
+      return;
+    }
+
+    final legacyDir = Directory(legacyArchivesPath);
+    if (!await legacyDir.exists()) return;
+
+    final targetDir = Directory(targetArchivesPath);
+    if (!await targetDir.exists()) {
+      await targetDir.create(recursive: true);
+    }
+
+    await for (final entity in legacyDir.list(
+      recursive: true,
+      followLinks: false,
+    )) {
+      final relativePath = p.relative(entity.path, from: legacyDir.path);
+      final destinationPath = p.join(targetDir.path, relativePath);
+
+      if (entity is Directory) {
+        await Directory(destinationPath).create(recursive: true);
+        continue;
+      }
+      if (entity is! File) continue;
+
+      final destinationFile = File(destinationPath);
+      if (await destinationFile.exists()) continue;
+
+      await Directory(p.dirname(destinationPath)).create(recursive: true);
+      try {
+        await entity.copy(destinationPath);
+      } catch (e) {
+        debugPrint(
+          '[DB] Failed to migrate archive ${entity.path} -> $destinationPath: $e',
+        );
+      }
+    }
+  }
+
+  // â”€â”€â”€ Connection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static Future<Database> get db async {
     if (_db != null) return _db!;
@@ -56,30 +320,54 @@ class DatabaseHelper {
     sqfliteFfiInit();
     final factory = databaseFactoryFfi;
 
-    // Resolve the directory of the running .exe so the database is stored
-    // alongside the executable in the release folder:
-    //   build\windows\x64\runner\Release\pims_deped.db
-    // During flutter run (debug/profile) this resolves to the build cache
-    // directory, which also works fine for development.
-    final exeDir  = File(Platform.resolvedExecutable).parent.path;
-    final dbPath  = p.join(exeDir, 'pims_deped.db');
-    final archDir = p.join(exeDir, 'archives');
+    // Production installs keep writable files in a per-user app data folder
+    // instead of beside the executable. We still migrate older exe-adjacent
+    // databases and archives forward on first launch.
+    final installDir = await installDirectoryPath;
+    final dataDir = await dataDirectoryPath;
+    final dbPath = await databaseFilePath;
+    final archDir = await archivesDirectoryPath;
+    final installedDbPath = p.join(installDir, _databaseFileName);
+    final installedLegacyDbPath = p.join(installDir, _legacyDatabaseFileName);
+    final dataDirLegacyDbPath = p.join(dataDir, _legacyDatabaseFileName);
 
-    // ── Integrity check → archive fallback ───────────────────────────────
+    await _migrateLegacyDatabaseFile(
+      legacyDbPath: installedDbPath,
+      dbPath: dbPath,
+      factory: factory,
+    );
+    await _migrateLegacyDatabaseFile(
+      legacyDbPath: installedLegacyDbPath,
+      dbPath: dbPath,
+      factory: factory,
+    );
+    await _migrateLegacyDatabaseFile(
+      legacyDbPath: dataDirLegacyDbPath,
+      dbPath: dbPath,
+      factory: factory,
+    );
+    await _migrateLegacyArchives(
+      legacyArchivesPath: p.join(installDir, _archivesFolderName),
+      targetArchivesPath: archDir,
+    );
+
+    // â”€â”€ Integrity check â†’ archive fallback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     final needsRecovery = !(await _isDatabaseValid(dbPath, factory));
     if (needsRecovery) {
       final recovered = await _recoverFromArchive(dbPath, archDir, factory);
       if (recovered) {
         debugPrint('[DB] Recovered main database from archive.');
       } else {
-        debugPrint('[DB] No valid archive found — starting with a fresh database.');
+        debugPrint(
+          '[DB] No valid archive found - starting with a fresh database.',
+        );
       }
     }
 
     _db = await factory.openDatabase(
       dbPath,
       options: OpenDatabaseOptions(
-        version: 7,
+        version: 8,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
       ),
@@ -88,8 +376,8 @@ class DatabaseHelper {
     return _db!;
   }
 
-  // ─── Validates that a db file exists, is non-empty, and passes SQLite's
-  //     own integrity_check pragma. Returns true only if all pass. ──────────
+  // â”€â”€â”€ Validates that a db file exists, is non-empty, and passes SQLite's
+  //     own integrity_check pragma. Returns true only if all pass. â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static Future<bool> _isDatabaseValid(
     String dbPath,
@@ -97,7 +385,7 @@ class DatabaseHelper {
   ) async {
     final file = File(dbPath);
 
-    // Missing or empty file — SQLite header is 100 bytes minimum
+    // Missing or empty file â€” SQLite header is 100 bytes minimum
     if (!await file.exists() || await file.length() < 100) {
       debugPrint('[DB] Main database missing or empty at $dbPath');
       return false;
@@ -111,7 +399,9 @@ class DatabaseHelper {
         options: OpenDatabaseOptions(readOnly: true),
       );
       final rows = await probe.rawQuery('PRAGMA integrity_check');
-      final result = rows.isNotEmpty ? rows.first.values.first as String? : null;
+      final result = rows.isNotEmpty
+          ? rows.first.values.first as String?
+          : null;
       if (result != 'ok') {
         debugPrint('[DB] Integrity check failed: $result');
         return false;
@@ -125,53 +415,36 @@ class DatabaseHelper {
     }
   }
 
-  // ─── Scans the archives folder (manual + auto) for the latest backup,
-  //     copies it to dbPath, and returns true on success. ───────────────────
+  // â”€â”€â”€ Scans the archives folder (manual + auto) for the latest backup,
+  //     copies it to dbPath, and returns true on success. â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static Future<bool> _recoverFromArchive(
     String dbPath,
     String archDir,
     DatabaseFactory factory,
   ) async {
-    final dir     = Directory(archDir);
-    final autoDir = Directory(p.join(archDir, _autoBackupSubdir));
-
-    // Collect .db files from both manual archives/ and archives/auto/
-    final archives = <File>[];
-    for (final d in [dir, autoDir]) {
-      if (!await d.exists()) continue;
-      final files = await d
-          .list()
-          .where((e) => e is File && e.path.endsWith('.db'))
-          .cast<File>()
-          .toList();
-      archives.addAll(files);
-    }
-
+    final archives = await listArchivesInfo();
     if (archives.isEmpty) {
-      debugPrint('[DB] No archives found in $archDir — starting fresh.');
+      debugPrint('[DB] No archives found in $archDir - starting fresh.');
       return false;
     }
-
-    // Sort newest-first across both folders (timestamp is in the filename)
-    archives.sort((a, b) => b.path.compareTo(a.path));
 
     for (final candidate in archives) {
       final ok = await _isDatabaseValid(candidate.path, factory);
       if (ok) {
         debugPrint('[DB] Restoring from archive: ${candidate.path}');
-        await candidate.copy(dbPath);
+        await File(candidate.path).copy(dbPath);
         return true;
       } else {
         debugPrint('[DB] Archive invalid, skipping: ${candidate.path}');
       }
     }
 
-    debugPrint('[DB] All archives are invalid — cannot recover.');
+    debugPrint('[DB] All archives are invalid - cannot recover.');
     return false;
   }
 
-  // ─── Schema ────────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Schema â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
@@ -210,6 +483,9 @@ class DatabaseHelper {
         entityType  TEXT NOT NULL,
         entityId    TEXT NOT NULL,
         action      TEXT NOT NULL,
+        actorName   TEXT NOT NULL,
+        actorRole   TEXT NOT NULL DEFAULT 'Admin',
+        actorComment TEXT,
         timestamp   TEXT NOT NULL,
         diffJson    TEXT NOT NULL
       )
@@ -228,19 +504,28 @@ class DatabaseHelper {
     ''');
   }
 
-  /// Incremental migrations — safe to run on existing databases.
-  static Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // v1 → v2: approval fields on wfp, targetDate on activities
+  /// Incremental migrations â€” safe to run on existing databases.
+  static Future<void> _onUpgrade(
+    Database db,
+    int oldVersion,
+    int newVersion,
+  ) async {
+    // v1 â†’ v2: approval fields on wfp, targetDate on activities
     if (oldVersion < 2) {
-      await _addColumnIfMissing(db, 'wfp', 'approvalStatus', "TEXT NOT NULL DEFAULT 'Pending'");
+      await _addColumnIfMissing(
+        db,
+        'wfp',
+        'approvalStatus',
+        "TEXT NOT NULL DEFAULT 'Pending'",
+      );
       await _addColumnIfMissing(db, 'wfp', 'approvedDate', 'TEXT');
       await _addColumnIfMissing(db, 'activities', 'targetDate', 'TEXT');
     }
-    // v2 → v3: dueDate on wfp
+    // v2 â†’ v3: dueDate on wfp
     if (oldVersion < 3) {
       await _addColumnIfMissing(db, 'wfp', 'dueDate', 'TEXT');
     }
-    // v3 → v4: audit_log table
+    // v3 â†’ v4: audit_log table
     if (oldVersion < 4) {
       await db.execute('''
         CREATE TABLE IF NOT EXISTS audit_log (
@@ -248,16 +533,24 @@ class DatabaseHelper {
           entityType  TEXT NOT NULL,
           entityId    TEXT NOT NULL,
           action      TEXT NOT NULL,
+          actorName   TEXT NOT NULL,
+          actorRole   TEXT NOT NULL DEFAULT 'Admin',
+          actorComment TEXT,
           timestamp   TEXT NOT NULL,
           diffJson    TEXT NOT NULL
         )
       ''');
     }
-    // v4 → v5: viewSection column on wfp (bug-fix migration — was missing)
+    // v4 â†’ v5: viewSection column on wfp (bug-fix migration â€” was missing)
     if (oldVersion < 5) {
-      await _addColumnIfMissing(db, 'wfp', 'viewSection', "TEXT NOT NULL DEFAULT 'HRD'");
+      await _addColumnIfMissing(
+        db,
+        'wfp',
+        'viewSection',
+        "TEXT NOT NULL DEFAULT 'HRD'",
+      );
     }
-    // v5 → v6: recycle_bin table
+    // v5 â†’ v6: recycle_bin table
     if (oldVersion < 6) {
       await db.execute('''
         CREATE TABLE IF NOT EXISTS recycle_bin (
@@ -268,11 +561,32 @@ class DatabaseHelper {
         )
       ''');
     }
-    // v6 → v7: activity soft-delete support in recycle_bin
+    // v6 â†’ v7: activity soft-delete support in recycle_bin
     if (oldVersion < 7) {
-      await _addColumnIfMissing(db, 'recycle_bin', 'entryType',    "TEXT NOT NULL DEFAULT 'WFP'");
+      await _addColumnIfMissing(
+        db,
+        'recycle_bin',
+        'entryType',
+        "TEXT NOT NULL DEFAULT 'WFP'",
+      );
       await _addColumnIfMissing(db, 'recycle_bin', 'activityJson', 'TEXT');
-      await _addColumnIfMissing(db, 'recycle_bin', 'wfpId',        'TEXT');
+      await _addColumnIfMissing(db, 'recycle_bin', 'wfpId', 'TEXT');
+    }
+    // v7 â†’ v8: actor metadata on audit_log
+    if (oldVersion < 8) {
+      await _addColumnIfMissing(
+        db,
+        'audit_log',
+        'actorName',
+        "TEXT NOT NULL DEFAULT 'Unknown user'",
+      );
+      await _addColumnIfMissing(
+        db,
+        'audit_log',
+        'actorRole',
+        "TEXT NOT NULL DEFAULT 'Admin'",
+      );
+      await _addColumnIfMissing(db, 'audit_log', 'actorComment', 'TEXT');
     }
   }
 
@@ -285,15 +599,19 @@ class DatabaseHelper {
     try {
       await db.execute('ALTER TABLE $table ADD COLUMN $column $definition');
     } catch (_) {
-      // Column already exists — safe to ignore
+      // Column already exists â€” safe to ignore
     }
   }
 
-  // ─── WFP CRUD ──────────────────────────────────────────────────────────────
+  // â”€â”€â”€ WFP CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static Future<void> insertWFP(WFPEntry entry) async {
     final d = await db;
-    await d.insert('wfp', entry.toMap(), conflictAlgorithm: ConflictAlgorithm.fail);
+    await d.insert(
+      'wfp',
+      entry.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.fail,
+    );
     _scheduleAutoBackup();
   }
 
@@ -312,7 +630,12 @@ class DatabaseHelper {
 
   static Future<void> updateWFP(WFPEntry entry) async {
     final d = await db;
-    await d.update('wfp', entry.toMap(), where: 'id = ?', whereArgs: [entry.id]);
+    await d.update(
+      'wfp',
+      entry.toMap(),
+      where: 'id = ?',
+      whereArgs: [entry.id],
+    );
     _scheduleAutoBackup();
   }
 
@@ -326,14 +649,20 @@ class DatabaseHelper {
   static Future<int> countWFPsByYear(int year) async {
     final d = await db;
     final result = await d.rawQuery(
-      'SELECT COUNT(*) AS cnt FROM wfp WHERE year = ?', [year],
+      'SELECT COUNT(*) AS cnt FROM wfp WHERE year = ?',
+      [year],
     );
     return (result.first['cnt'] as int?) ?? 0;
   }
 
   static Future<bool> wfpIdExists(String id) async {
     final d = await db;
-    final rows = await d.query('wfp', columns: ['id'], where: 'id = ?', whereArgs: [id]);
+    final rows = await d.query(
+      'wfp',
+      columns: ['id'],
+      where: 'id = ?',
+      whereArgs: [id],
+    );
     return rows.isNotEmpty;
   }
 
@@ -345,8 +674,14 @@ class DatabaseHelper {
     final d = await db;
     final where = <String>[];
     final args = <dynamic>[];
-    if (year != null) { where.add('year = ?'); args.add(year); }
-    if (approvalStatus != null) { where.add('approvalStatus = ?'); args.add(approvalStatus); }
+    if (year != null) {
+      where.add('year = ?');
+      args.add(year);
+    }
+    if (approvalStatus != null) {
+      where.add('approvalStatus = ?');
+      args.add(approvalStatus);
+    }
     final rows = await d.query(
       'wfp',
       where: where.isEmpty ? null : where.join(' AND '),
@@ -359,15 +694,21 @@ class DatabaseHelper {
   /// All distinct years in the wfp table, descending.
   static Future<List<int>> getDistinctYears() async {
     final d = await db;
-    final rows = await d.rawQuery('SELECT DISTINCT year FROM wfp ORDER BY year DESC');
+    final rows = await d.rawQuery(
+      'SELECT DISTINCT year FROM wfp ORDER BY year DESC',
+    );
     return rows.map((r) => r['year'] as int).toList();
   }
 
-  // ─── Activity CRUD ─────────────────────────────────────────────────────────
+  // â”€â”€â”€ Activity CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static Future<void> insertActivity(BudgetActivity activity) async {
     final d = await db;
-    await d.insert('activities', activity.toMap(), conflictAlgorithm: ConflictAlgorithm.fail);
+    await d.insert(
+      'activities',
+      activity.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.fail,
+    );
     _scheduleAutoBackup();
   }
 
@@ -384,7 +725,12 @@ class DatabaseHelper {
 
   static Future<void> updateActivity(BudgetActivity activity) async {
     final d = await db;
-    await d.update('activities', activity.toMap(), where: 'id = ?', whereArgs: [activity.id]);
+    await d.update(
+      'activities',
+      activity.toMap(),
+      where: 'id = ?',
+      whereArgs: [activity.id],
+    );
     _scheduleAutoBackup();
   }
 
@@ -397,14 +743,20 @@ class DatabaseHelper {
   static Future<int> countActivitiesForWFP(String wfpId) async {
     final d = await db;
     final result = await d.rawQuery(
-      'SELECT COUNT(*) AS cnt FROM activities WHERE wfpId = ?', [wfpId],
+      'SELECT COUNT(*) AS cnt FROM activities WHERE wfpId = ?',
+      [wfpId],
     );
     return (result.first['cnt'] as int?) ?? 0;
   }
 
   static Future<bool> activityIdExists(String id) async {
     final d = await db;
-    final rows = await d.query('activities', columns: ['id'], where: 'id = ?', whereArgs: [id]);
+    final rows = await d.query(
+      'activities',
+      columns: ['id'],
+      where: 'id = ?',
+      whereArgs: [id],
+    );
     return rows.isNotEmpty;
   }
 
@@ -439,50 +791,60 @@ class DatabaseHelper {
     return result;
   }
 
-  // ─── Deadline queries ──────────────────────────────────────────────────────
+  // â”€â”€â”€ Deadline queries â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// WFP entries whose dueDate falls within [withinDays] days from today.
   static Future<List<WFPEntry>> getWFPsDueSoon(int withinDays) async {
     final d = await db;
     final today = DateTime.now();
     final limit = today.add(Duration(days: withinDays));
-    final todayStr = today.toIso8601String().substring(0, 10);
     final limitStr = limit.toIso8601String().substring(0, 10);
     final rows = await d.rawQuery(
-      'SELECT * FROM wfp WHERE dueDate IS NOT NULL AND dueDate >= ? AND dueDate <= ?',
-      [todayStr, limitStr],
+      'SELECT * FROM wfp '
+      'WHERE dueDate IS NOT NULL AND dueDate <= ? '
+      'ORDER BY dueDate ASC, id ASC',
+      [limitStr],
     );
     return rows.map(WFPEntry.fromMap).toList();
   }
 
   /// Activities whose targetDate falls within [withinDays] days from today.
-  static Future<List<BudgetActivity>> getActivitiesDueSoon(int withinDays) async {
+  static Future<List<BudgetActivity>> getActivitiesDueSoon(
+    int withinDays,
+  ) async {
     final d = await db;
     final today = DateTime.now();
     final limit = today.add(Duration(days: withinDays));
-    final todayStr = today.toIso8601String().substring(0, 10);
     final limitStr = limit.toIso8601String().substring(0, 10);
     final rows = await d.rawQuery(
-      'SELECT * FROM activities WHERE targetDate IS NOT NULL AND targetDate >= ? AND targetDate <= ?',
-      [todayStr, limitStr],
+      'SELECT * FROM activities '
+      'WHERE targetDate IS NOT NULL AND targetDate <= ? '
+      'ORDER BY targetDate ASC, id ASC',
+      [limitStr],
     );
     return rows.map(BudgetActivity.fromMap).toList();
   }
-  // ─── Audit Log ─────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Audit Log â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static Future<void> insertAuditLog({
     required String entityType,
     required String entityId,
     required String action,
+    required String actorName,
+    required String actorRole,
     required String diffJson,
+    String? actorComment,
   }) async {
     final d = await db;
     await d.insert('audit_log', {
       'entityType': entityType,
-      'entityId':   entityId,
-      'action':     action,
-      'timestamp':  DateTime.now().toIso8601String(),
-      'diffJson':   diffJson,
+      'entityId': entityId,
+      'action': action,
+      'actorName': actorName,
+      'actorRole': actorRole,
+      'actorComment': actorComment,
+      'timestamp': DateTime.now().toIso8601String(),
+      'diffJson': diffJson,
     });
   }
 
@@ -491,17 +853,23 @@ class DatabaseHelper {
     String? entityType,
     String? entityId,
   }) async {
-    final d      = await db;
-    final where  = <String>[];
-    final args   = <dynamic>[];
-    if (entityType != null) { where.add('entityType = ?'); args.add(entityType); }
-    if (entityId   != null) { where.add('entityId = ?');   args.add(entityId); }
+    final d = await db;
+    final where = <String>[];
+    final args = <dynamic>[];
+    if (entityType != null) {
+      where.add('entityType = ?');
+      args.add(entityType);
+    }
+    if (entityId != null) {
+      where.add('entityId = ?');
+      args.add(entityId);
+    }
     return d.query(
       'audit_log',
-      where:    where.isEmpty ? null : where.join(' AND '),
+      where: where.isEmpty ? null : where.join(' AND '),
       whereArgs: args.isEmpty ? null : args,
-      orderBy:  'id DESC',
-      limit:    limit,
+      orderBy: 'id DESC',
+      limit: limit,
     );
   }
 
@@ -510,14 +878,19 @@ class DatabaseHelper {
     await d.delete('audit_log');
   }
 
-  // ─── Recycle Bin ───────────────────────────────────────────────────────────
+  // â”€â”€â”€ Recycle Bin â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Moves a WFP and all its activities into the recycle_bin as JSON snapshots,
   /// then hard-deletes them from the live tables. Returns the bin row id.
-  static Future<int> softDeleteWFP(WFPEntry entry, List<BudgetActivity> activities) async {
+  static Future<int> softDeleteWFP(
+    WFPEntry entry,
+    List<BudgetActivity> activities,
+  ) async {
     final d = await db;
-    final wfpJson        = jsonEncode(entry.toMap());
-    final activitiesJson = jsonEncode(activities.map((a) => a.toMap()).toList());
+    final wfpJson = jsonEncode(entry.toMap());
+    final activitiesJson = jsonEncode(
+      activities.map((a) => a.toMap()).toList(),
+    );
     int binId = -1;
     await d.transaction((txn) async {
       final pragma = await txn.rawQuery("PRAGMA table_info('recycle_bin')");
@@ -528,13 +901,14 @@ class DatabaseHelper {
       final entryMap = <String, dynamic>{
         if (columns.contains('entrytype')) 'entryType': 'WFP',
         if (columns.contains('wfpjson')) 'wfpJson': wfpJson,
-        if (columns.contains('activitiesjson')) 'activitiesJson': activitiesJson,
+        if (columns.contains('activitiesjson'))
+          'activitiesJson': activitiesJson,
         'deletedAt': DateTime.now().toIso8601String(),
       };
 
       binId = await txn.insert('recycle_bin', entryMap);
       await txn.delete('activities', where: 'wfpId = ?', whereArgs: [entry.id]);
-      await txn.delete('wfp',        where: 'id = ?',    whereArgs: [entry.id]);
+      await txn.delete('wfp', where: 'id = ?', whereArgs: [entry.id]);
     });
     _scheduleAutoBackup();
     return binId;
@@ -589,12 +963,25 @@ class DatabaseHelper {
   ) async {
     final d = await db;
     // Guard: don't restore if id already exists in live table
-    final existing = await d.query('wfp', columns: ['id'], where: 'id = ?', whereArgs: [wfp.id]);
+    final existing = await d.query(
+      'wfp',
+      columns: ['id'],
+      where: 'id = ?',
+      whereArgs: [wfp.id],
+    );
     if (existing.isNotEmpty) return false;
 
-    await d.insert('wfp', wfp.toMap(), conflictAlgorithm: ConflictAlgorithm.fail);
+    await d.insert(
+      'wfp',
+      wfp.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.fail,
+    );
     for (final a in activities) {
-      await d.insert('activities', a.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+      await d.insert(
+        'activities',
+        a.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
     }
     await d.delete('recycle_bin', where: 'id = ?', whereArgs: [binId]);
     _scheduleAutoBackup();
@@ -610,16 +997,27 @@ class DatabaseHelper {
   ) async {
     final d = await db;
     // Guard: parent WFP must still exist
-    final wfpRows = await d.query('wfp', columns: ['id'],
-        where: 'id = ?', whereArgs: [activity.wfpId]);
+    final wfpRows = await d.query(
+      'wfp',
+      columns: ['id'],
+      where: 'id = ?',
+      whereArgs: [activity.wfpId],
+    );
     if (wfpRows.isEmpty) return false;
     // Guard: activity id must not already exist
-    final actRows = await d.query('activities', columns: ['id'],
-        where: 'id = ?', whereArgs: [activity.id]);
+    final actRows = await d.query(
+      'activities',
+      columns: ['id'],
+      where: 'id = ?',
+      whereArgs: [activity.id],
+    );
     if (actRows.isNotEmpty) return false;
 
-    await d.insert('activities', activity.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.fail);
+    await d.insert(
+      'activities',
+      activity.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.fail,
+    );
     await d.delete('recycle_bin', where: 'id = ?', whereArgs: [binId]);
     _scheduleAutoBackup();
     return true;
@@ -644,9 +1042,9 @@ class DatabaseHelper {
     await d.delete('recycle_bin');
   }
 
-  // ─── Auto-backup ───────────────────────────────────────────────────────────
+  // â”€â”€â”€ Auto-backup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-  /// Debounced trigger — resets the 30-second timer on every write.
+  /// Debounced trigger â€” resets the 30-second timer on every write.
   /// Only one backup fires per burst of activity, not one per save.
   static void _scheduleAutoBackup() {
     _autoBackupTimer?.cancel();
@@ -658,43 +1056,18 @@ class DatabaseHelper {
   /// always consistent even while the database is open and locked.
   static Future<void> _runAutoBackup() async {
     try {
-      final exeDir  = File(Platform.resolvedExecutable).parent.path;
-      final dbPath  = p.join(exeDir, 'pims_deped.db');
-      final autoDir = Directory(p.join(exeDir, 'archives', _autoBackupSubdir));
+      final now = DateTime.now();
+      final dest = await _createArchiveSnapshot(
+        fileName: 'pmis_deped_auto_${_timestamp(now)}.db',
+        subdirectory: _autoBackupSubdir,
+      );
 
-      // Sanity-check the source before doing anything
-      final src = File(dbPath);
-      if (!await src.exists() || await src.length() < 100) {
-        debugPrint('[AutoBackup] Skipped — main DB is missing or empty.');
-        return;
-      }
-
-      if (!await autoDir.exists()) await autoDir.create(recursive: true);
-
-      final now   = DateTime.now();
-      final stamp =
-          '${now.year.toString().padLeft(4, '0')}'
-          '${now.month.toString().padLeft(2, '0')}'
-          '${now.day.toString().padLeft(2, '0')}_'
-          '${now.hour.toString().padLeft(2, '0')}'
-          '${now.minute.toString().padLeft(2, '0')}'
-          '${now.second.toString().padLeft(2, '0')}';
-      final dest = p.join(autoDir.path, 'pims_deped_auto_$stamp.db');
-
-      // VACUUM INTO creates a clean, consistent copy through SQLite itself —
-      // safe while the DB is open, no file-lock conflicts on Windows.
-      // Use forward slashes: SQLite on Windows accepts both but some builds
-      // choke on backslashes inside SQL strings.
-      final destForSql = dest.replaceAll('\\', '/');
-      final d = await db;
-      await d.execute("VACUUM INTO '$destForSql'");
-
-      lastAutoBackupTime   = now;
-      lastAutoBackupPath   = dest;
+      lastAutoBackupTime = now;
+      lastAutoBackupPath = dest;
       lastAutoBackupFailed = false;
       debugPrint('[AutoBackup] Saved to $dest');
 
-      // ── Prune oldest auto-backups beyond the cap ───────────────────────
+      final autoDir = Directory(await autoArchivesDirectoryPath);
       final files = await autoDir
           .list()
           .where((e) => e is File && e.path.endsWith('.db'))
@@ -714,23 +1087,134 @@ class DatabaseHelper {
     }
   }
 
-  // ─── Manual snapshot helpers ───────────────────────────────────────────
+  static String _sanitizeArchiveLabel(String label) {
+    final trimmed = label.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError('Backup name cannot be empty.');
+    }
+
+    final cleaned = trimmed
+        .replaceAll(RegExp(r'[<>:"/\\|?*]'), '')
+        .replaceAll(RegExp(r'\s+'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'[^\w-]'), '')
+        .replaceAll(RegExp(r'^[_-]+|[_-]+$'), '');
+
+    if (cleaned.isEmpty) {
+      throw ArgumentError('Backup name must include letters or numbers.');
+    }
+
+    return cleaned;
+  }
+
+  static Future<ArchiveSnapshotInfo?> _buildArchiveInfo(
+    File file, {
+    required bool isAutoBackup,
+  }) async {
+    try {
+      final stat = await file.stat();
+      if (stat.type != FileSystemEntityType.file) {
+        return null;
+      }
+      return ArchiveSnapshotInfo(
+        path: file.path,
+        modifiedAt: stat.modified,
+        sizeBytes: stat.size,
+        isAutoBackup: isAutoBackup,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<List<ArchiveSnapshotInfo>> _listArchiveInfoFromDirectory(
+    String directoryPath, {
+    required bool isAutoBackup,
+  }) async {
+    final dir = Directory(directoryPath);
+    if (!await dir.exists()) {
+      return const [];
+    }
+
+    final files = await dir
+        .list(followLinks: false)
+        .where((entity) => entity is File && entity.path.endsWith('.db'))
+        .cast<File>()
+        .toList();
+
+    final snapshots = await Future.wait(
+      files.map((file) => _buildArchiveInfo(file, isAutoBackup: isAutoBackup)),
+    );
+
+    return snapshots.whereType<ArchiveSnapshotInfo>().toList(growable: false);
+  }
+
+  static Future<List<ArchiveSnapshotInfo>> listArchivesInfo({
+    bool includeManual = true,
+    bool includeAuto = true,
+  }) async {
+    final archives = <ArchiveSnapshotInfo>[];
+
+    if (includeManual) {
+      final archivesRoot = Directory(await archivesDirectoryPath);
+      if (await archivesRoot.exists()) {
+        final legacyRootFiles = await archivesRoot
+            .list(followLinks: false)
+            .where((entity) => entity is File && entity.path.endsWith('.db'))
+            .cast<File>()
+            .toList();
+        final legacySnapshots = await Future.wait(
+          legacyRootFiles.map(
+            (file) => _buildArchiveInfo(file, isAutoBackup: false),
+          ),
+        );
+        archives.addAll(legacySnapshots.whereType<ArchiveSnapshotInfo>());
+      }
+
+      archives.addAll(
+        await _listArchiveInfoFromDirectory(
+          await manualArchivesDirectoryPath,
+          isAutoBackup: false,
+        ),
+      );
+    }
+
+    if (includeAuto) {
+      archives.addAll(
+        await _listArchiveInfoFromDirectory(
+          await autoArchivesDirectoryPath,
+          isAutoBackup: true,
+        ),
+      );
+    }
+
+    archives.sort((a, b) => b.modifiedAt.compareTo(a.modifiedAt));
+    return archives;
+  }
+
+  static Future<List<ArchiveSnapshotInfo>> listManualArchivesInfo() =>
+      listArchivesInfo(includeAuto: false);
+
+  static Future<List<ArchiveSnapshotInfo>> listAutoArchivesInfo() =>
+      listArchivesInfo(includeManual: false);
+
+  static Future<String> createManualArchive({String? label}) async {
+    final now = DateTime.now();
+    final timestamp = _timestamp(now);
+    final fileName = label == null
+        ? 'pmis_deped_$timestamp.db'
+        : 'pmis_deped_manual_${_sanitizeArchiveLabel(label)}_$timestamp.db';
+    return _createArchiveSnapshot(
+      fileName: fileName,
+      subdirectory: _manualBackupSubdir,
+    );
+  }
+
+  // â”€â”€â”€ Manual snapshot helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Returns a list of available archive db files (manual + auto), newest-first.
-  static Future<List<String>> listArchives() async {
-    final exeDir = File(Platform.resolvedExecutable).parent.path;
-    final archDir = Directory(p.join(exeDir, 'archives'));
-    final files = <File>[];
-    if (await archDir.exists()) {
-      files.addAll(await archDir
-          .list(recursive: true)
-          .where((e) => e is File && e.path.endsWith('.db'))
-          .cast<File>()
-          .toList());
-    }
-    files.sort((a, b) => b.path.compareTo(a.path));
-    return files.map((f) => f.path).toList();
-  }
+  static Future<List<String>> listArchives() async =>
+      (await listArchivesInfo()).map((archive) => archive.path).toList();
 
   /// Validate a candidate archive DB file by running SQLite's integrity_check.
   /// Returns true only if the file exists and the integrity check returns 'ok'.
@@ -754,6 +1238,42 @@ class DatabaseHelper {
     _db = null;
   }
 
+  /// Initialize a temporary database for tests.
+  /// If [dbPath] is omitted a temp file is used. This method sets the
+  /// internal `_db` handle so the rest of the static helpers operate
+  /// against the test database.
+  static Future<void> initForTests({String? dbPath}) async {
+    try {
+      await closeDatabase();
+      sqfliteFfiInit();
+      final factory = databaseFactoryFfi;
+      final pathToUse =
+          dbPath ??
+          p.join(
+            Directory.systemTemp.createTempSync().path,
+            'pmis_deped_test.db',
+          );
+      _cachedDataRootPath = null;
+      _dataRootPathOverride = p.dirname(pathToUse);
+      _databasePathOverride = pathToUse;
+      _archivesPathOverride = p.join(
+        _dataRootPathOverride!,
+        _archivesFolderName,
+      );
+      _db = await factory.openDatabase(
+        pathToUse,
+        options: OpenDatabaseOptions(
+          version: 8,
+          onCreate: _onCreate,
+          onUpgrade: _onUpgrade,
+        ),
+      );
+    } catch (e) {
+      debugPrint('[DB Test Init] failed: $e');
+      rethrow;
+    }
+  }
+
   /// Restore the main database from an archive file. Performs a quick
   /// integrity check on the candidate archive before replacing the live DB.
   /// Returns true on success.
@@ -764,19 +1284,28 @@ class DatabaseHelper {
       final ok = await _isDatabaseValid(archivePath, factory);
       if (!ok) return false;
 
-      final exeDir = File(Platform.resolvedExecutable).parent.path;
-      final dbPath = p.join(exeDir, 'pims_deped.db');
+      final dbPath = await databaseFilePath;
+      final manualArchivesPath = await manualArchivesDirectoryPath;
+      final stamp = _timestamp(DateTime.now());
+      String? preRestoreBackup;
 
-      // Make a timestamped backup of current DB before overwrite
-      final src = File(dbPath);
-      if (await src.exists()) {
-        final now = DateTime.now();
-        final stamp =
-            '${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
-        final backup = p.join(exeDir, 'pims_deped_pre_restore_$stamp.db');
-        try {
-          await src.copy(backup);
-        } catch (_) {}
+      try {
+        preRestoreBackup = await _createArchiveSnapshot(
+          fileName: 'pmis_deped_pre_restore_$stamp.db',
+          subdirectory: _manualBackupSubdir,
+        );
+      } catch (_) {
+        final src = File(dbPath);
+        if (await src.exists()) {
+          final fallback = p.join(
+            manualArchivesPath,
+            'pmis_deped_pre_restore_$stamp.db',
+          );
+          try {
+            await src.copy(fallback);
+            preRestoreBackup = fallback;
+          } catch (_) {}
+        }
       }
 
       // Close DB, overwrite, and reset internal handle so next db getter reopens
@@ -786,6 +1315,18 @@ class DatabaseHelper {
       final destFile = File(dbPath);
       if (await destFile.exists()) await destFile.delete();
       await archFile.copy(dbPath);
+      final restoredValid = await _isDatabaseValid(dbPath, factory);
+      if (!restoredValid) {
+        if (preRestoreBackup != null) {
+          final backupFile = File(preRestoreBackup);
+          if (await backupFile.exists()) {
+            if (await destFile.exists()) await destFile.delete();
+            await backupFile.copy(dbPath);
+          }
+        }
+        _db = null;
+        return false;
+      }
       _db = null;
       return true;
     } catch (e) {
@@ -804,7 +1345,9 @@ class DatabaseHelper {
       // Quick integrity check first
       try {
         final rows = await d.rawQuery('PRAGMA integrity_check');
-        final result = rows.isNotEmpty ? rows.first.values.first as String? : null;
+        final result = rows.isNotEmpty
+            ? rows.first.values.first as String?
+            : null;
         if (result != 'ok') {
           debugPrint('[DB] integrity_check failed: $result');
           return false;
@@ -824,7 +1367,7 @@ class DatabaseHelper {
         await d.execute('VACUUM');
       } catch (e) {
         debugPrint('[DB] VACUUM failed: $e');
-        // Not fatal — continue
+        // Not fatal â€” continue
       }
 
       // ANALYZE to update sqlite statistics
@@ -838,5 +1381,4 @@ class DatabaseHelper {
       return false;
     }
   }
-
 }

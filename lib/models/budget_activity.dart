@@ -30,7 +30,10 @@ class BudgetActivity {
     if (targetDate == null) return null;
     final target = DateTime.tryParse(targetDate!);
     if (target == null) return null;
-    return target.difference(DateTime.now()).inDays;
+    final today = DateTime.now();
+    final targetDateOnly = DateTime(target.year, target.month, target.day);
+    final todayDateOnly = DateTime(today.year, today.month, today.day);
+    return targetDateOnly.difference(todayDateOnly).inDays;
   }
 
   BudgetActivity copyWith({
@@ -57,26 +60,26 @@ class BudgetActivity {
   }
 
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'wfpId': wfpId,
-        'name': name,
-        'total': total,
-        'projected': projected,
-        'disbursed': disbursed,
-        'status': status,
-        'targetDate': targetDate,
-      };
+    'id': id,
+    'wfpId': wfpId,
+    'name': name,
+    'total': total,
+    'projected': projected,
+    'disbursed': disbursed,
+    'status': status,
+    'targetDate': targetDate,
+  };
 
   factory BudgetActivity.fromMap(Map<String, dynamic> map) => BudgetActivity(
-        id: map['id'] as String,
-        wfpId: map['wfpId'] as String,
-        name: map['name'] as String,
-        total: (map['total'] as num).toDouble(),
-        projected: (map['projected'] as num).toDouble(),
-        disbursed: (map['disbursed'] as num).toDouble(),
-        status: map['status'] as String,
-        targetDate: map['targetDate'] as String?,
-      );
+    id: map['id'] as String,
+    wfpId: map['wfpId'] as String,
+    name: map['name'] as String,
+    total: (map['total'] as num).toDouble(),
+    projected: (map['projected'] as num).toDouble(),
+    disbursed: (map['disbursed'] as num).toDouble(),
+    status: map['status'] as String,
+    targetDate: map['targetDate'] as String?,
+  );
 
   @override
   bool operator ==(Object other) => other is BudgetActivity && other.id == id;

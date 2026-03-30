@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "pims_deped" "\0"
+            VALUE "FileDescription", "PMIS DepED" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "pims_deped" "\0"
+            VALUE "InternalName", "pmis_deped" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "pims_deped.exe" "\0"
-            VALUE "ProductName", "pims_deped" "\0"
+            VALUE "OriginalFilename", "pmis_deped.exe" "\0"
+            VALUE "ProductName", "PMIS DepED" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
